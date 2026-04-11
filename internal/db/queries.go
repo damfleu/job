@@ -44,7 +44,7 @@ func (d *DB) Search(query string) ([]*model.Job, error) {
 }
 
 func (d *DB) FindByAlias(alias string) (*model.Job, error) {
-	row := d.db.QueryRow(`SELECT `+jobCols+` FROM jobs WHERE alias = ?`, alias)
+	row := d.db.QueryRow(`SELECT `+jobCols+` FROM jobs WHERE alias = ? ORDER BY created_at DESC LIMIT 1`, alias)
 	job, err := scanJob(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

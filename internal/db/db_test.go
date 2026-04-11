@@ -205,6 +205,26 @@ func TestSearch(t *testing.T) {
 	assert.Len(t, all, 1)
 }
 
+func TestFindByAliasMostRecent(t *testing.T) {
+	db := openMemDB(t)
+
+	earlier := makeJob("old_key")
+	earlier.Alias = "foo"
+	earlier.Status = model.StatusCompleted
+	earlier.CreatedAt = time.Now().UTC().Add(-time.Hour)
+	require.NoError(t, db.Insert(earlier))
+
+	later := makeJob("new_key")
+	later.Alias = "foo"
+	later.Status = model.StatusRunning
+	later.CreatedAt = time.Now().UTC()
+	require.NoError(t, db.Insert(later))
+
+	got, err := db.FindByAlias("foo")
+	require.NoError(t, err)
+	assert.Equal(t, "new_key", got.Key, "should return most recently created job")
+}
+
 func TestLastKey(t *testing.T) {
 	db := openMemDB(t)
 
