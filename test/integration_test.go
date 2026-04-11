@@ -256,6 +256,51 @@ func TestVerboseFlag(t *testing.T) {
 	assert.Contains(t, r.stderr, "done")
 }
 
+func TestDepAfter(t *testing.T) {
+	h := newHarness(t)
+
+	// run a quick job and capture its key
+	r := h.run("-v", "-f", "--", "echo", "dep job")
+	depKey := strings.TrimSpace(r.stderr)
+	// stderr has "key running\nkey done\n", extract first word of first line
+	depKey = strings.Fields(depKey)[0]
+
+	// spawn a job that depends on it
+	r2 := h.run("-v", "-a", depKey, "--", "echo", "dependent job")
+	childKey := strings.TrimSpace(r2.stderr)
+	require.NotEmpty(t, childKey)
+
+	h.waitFor(childKey, model.StatusCompleted)
+
+	j, err := h.db.Get(childKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, j.Status)
+	assert.Equal(t, model.ReasonExited, j.Reason)
+	require.NotNil(t, j.ExitCode)
+	assert.Equal(t, 0, *j.ExitCode)
+}
+
+func TestDepAfterSuccessFails(t *testing.T) {
+	h := newHarness(t)
+
+	// run a job that fails
+	r := h.run("-v", "-f", "--", "false")
+	depKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
+
+	// spawn a job with after-success dep
+	r2 := h.run("-v", "-A", depKey, "--", "echo", "should not run")
+	childKey := strings.TrimSpace(r2.stderr)
+	require.NotEmpty(t, childKey)
+
+	h.waitFor(childKey, model.StatusCompleted)
+
+	j, err := h.db.Get(childKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, j.Status)
+	assert.Equal(t, model.ReasonDepFailed, j.Reason)
+	assert.Nil(t, j.ExitCode)
+}
+
 // projectRoot walks up from the current directory to find the go.mod.
 func projectRoot() string {
 	dir, _ := os.Getwd()

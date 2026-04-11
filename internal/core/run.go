@@ -19,6 +19,7 @@ import (
 type RunOptions struct {
 	Alias   string
 	Verbose bool
+	Deps    []model.Dep
 }
 
 // CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
@@ -43,6 +44,7 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		Hostname:  hostname(),
 		Username:  username(),
 		CreatedAt: now,
+		Deps:      opts.Deps,
 	}
 
 	if err := store.Insert(j); err != nil {
@@ -50,6 +52,24 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 	}
 	if err := store.SetLastKey(key); err != nil {
 		return 0, err
+	}
+
+	if len(opts.Deps) > 0 {
+		j.Status = model.StatusBlocked
+		if err := store.Update(j); err != nil {
+			return 0, err
+		}
+		if err := WaitForDeps(store, j); err != nil {
+			if errors.Is(err, ErrDepFailed) {
+				stoppedAt := time.Now().UTC()
+				j.Status = model.StatusCompleted
+				j.Reason = model.ReasonDepFailed
+				j.StoppedAt = &stoppedAt
+				_ = store.Update(j)
+				return 0, fmt.Errorf("dependency failed")
+			}
+			return 0, err
+		}
 	}
 
 	lf, err := logfile.Create(stateDir, key)
@@ -116,6 +136,7 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 		Hostname:  hostname(),
 		Username:  username(),
 		CreatedAt: now,
+		Deps:      opts.Deps,
 	}
 
 	if err := store.Insert(j); err != nil {

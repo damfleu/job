@@ -21,6 +21,18 @@ func RunBackground(store db.JobStore, key string) error {
 		return err
 	}
 
+	if len(j.Deps) > 0 {
+		j.Status = model.StatusBlocked
+		_ = store.Update(j)
+
+		if err := WaitForDeps(store, j); err != nil {
+			if errors.Is(err, ErrDepFailed) {
+				return markDepFailed(store, j)
+			}
+			return err
+		}
+	}
+
 	if err := os.MkdirAll(filepath.Dir(j.LogFile), 0o755); err != nil {
 		return fmt.Errorf("creating log dir: %w", err)
 	}
@@ -65,6 +77,15 @@ func RunBackground(store db.JobStore, key string) error {
 	j.ExitCode = &exitCode
 
 	_ = lf.Sync()
+	_ = store.Update(j)
+	return nil
+}
+
+func markDepFailed(store db.JobStore, j *model.Job) error {
+	stoppedAt := time.Now().UTC()
+	j.Status = model.StatusCompleted
+	j.Reason = model.ReasonDepFailed
+	j.StoppedAt = &stoppedAt
 	_ = store.Update(j)
 	return nil
 }

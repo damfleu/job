@@ -10,13 +10,16 @@ import (
 
 	"job/internal/core"
 	"job/internal/db"
+	"job/internal/model"
 )
 
 var (
-	verbose    bool
-	foreground bool
-	jobAlias   string
-	globalDB   *db.DB
+	verbose         bool
+	foreground      bool
+	jobAlias        string
+	afterKeys       []string
+	afterSuccessKeys []string
+	globalDB        *db.DB
 )
 
 var rootCmd = &cobra.Command{
@@ -58,7 +61,11 @@ func Execute() {
 }
 
 func runJob(command []string) error {
-	opts := core.RunOptions{Alias: jobAlias, Verbose: verbose}
+	deps, err := resolveDeps(afterKeys, afterSuccessKeys)
+	if err != nil {
+		return err
+	}
+	opts := core.RunOptions{Alias: jobAlias, Verbose: verbose, Deps: deps}
 	if foreground {
 		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
 		if err != nil {
@@ -87,6 +94,25 @@ func keyArg(args []string) string {
 	return "."
 }
 
+func resolveDeps(after, afterSuccess []string) ([]model.Dep, error) {
+	var deps []model.Dep
+	for _, k := range after {
+		j, err := core.ResolveKey(globalDB, k)
+		if err != nil {
+			return nil, fmt.Errorf("resolving --after %q: %w", k, err)
+		}
+		deps = append(deps, model.Dep{Key: j.Key, Kind: model.DepAfter})
+	}
+	for _, k := range afterSuccess {
+		j, err := core.ResolveKey(globalDB, k)
+		if err != nil {
+			return nil, fmt.Errorf("resolving --after-success %q: %w", k, err)
+		}
+		deps = append(deps, model.Dep{Key: j.Key, Kind: model.DepAfterSuccess})
+	}
+	return deps, nil
+}
+
 func stateDir() string {
 	if dir := os.Getenv("JOB_STATE_DIR"); dir != "" {
 		return dir
@@ -98,4 +124,6 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print job key and status")
 	rootCmd.Flags().BoolVarP(&foreground, "foreground", "f", false, "run in foreground")
 	rootCmd.Flags().StringVarP(&jobAlias, "key", "k", "", "explicit job key/alias")
+	rootCmd.Flags().StringArrayVarP(&afterKeys, "after", "a", nil, "run after job completes (any exit code)")
+	rootCmd.Flags().StringArrayVarP(&afterSuccessKeys, "after-success", "A", nil, "run only if job succeeds (exit 0)")
 }
