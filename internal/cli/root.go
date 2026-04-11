@@ -79,6 +79,14 @@ func runJob(command []string) error {
 	return nil
 }
 
+// keyArg returns the first element of args, or "." if args is empty.
+func keyArg(args []string) string {
+	if len(args) > 0 {
+		return args[0]
+	}
+	return "."
+}
+
 func stateDir() string {
 	if dir := os.Getenv("JOB_STATE_DIR"); dir != "" {
 		return dir

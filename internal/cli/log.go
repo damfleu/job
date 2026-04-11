@@ -15,9 +15,9 @@ var logPath bool
 var logCmd = &cobra.Command{
 	Use:   "log <key>",
 	Short: "Display log output for a job",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := core.ResolveKey(globalDB, args[0])
+		j, err := core.ResolveKey(globalDB, keyArg(args))
 		if err != nil {
 			return err
 		}
