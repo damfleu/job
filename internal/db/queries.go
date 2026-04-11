@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"job/internal/model"
@@ -36,6 +38,30 @@ func (d *DB) Search(query string) ([]*model.Job, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: search: %w", err)
+	}
+	defer rows.Close()
+	return scanJobs(rows)
+}
+
+func (d *DB) FindByAlias(alias string) (*model.Job, error) {
+	row := d.db.QueryRow(`SELECT `+jobCols+` FROM jobs WHERE alias = ?`, alias)
+	job, err := scanJob(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("db: find by alias %q: %w", alias, err)
+	}
+	return job, nil
+}
+
+func (d *DB) FindByKeyPrefix(prefix string) ([]*model.Job, error) {
+	rows, err := d.db.Query(
+		`SELECT `+jobCols+` FROM jobs WHERE key LIKE ? ORDER BY created_at DESC`,
+		prefix+"%",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: find by prefix %q: %w", prefix, err)
 	}
 	defer rows.Close()
 	return scanJobs(rows)

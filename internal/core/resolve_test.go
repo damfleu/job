@@ -1,0 +1,148 @@
+package core
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"job/internal/db"
+	"job/internal/model"
+)
+
+// fakeStore implements db.JobStore for testing resolve logic.
+type fakeStore struct {
+	jobs    []*model.Job
+	lastKey string
+}
+
+func (f *fakeStore) Get(key string) (*model.Job, error) {
+	for _, j := range f.jobs {
+		if j.Key == key {
+			return j, nil
+		}
+	}
+	return nil, db.ErrNotFound
+}
+
+func (f *fakeStore) FindByAlias(alias string) (*model.Job, error) {
+	for _, j := range f.jobs {
+		if j.Alias == alias {
+			return j, nil
+		}
+	}
+	return nil, db.ErrNotFound
+}
+
+func (f *fakeStore) Search(query string) ([]*model.Job, error) {
+	var out []*model.Job
+	for _, j := range f.jobs {
+		if strings.Contains(strings.Join(j.Command, " "), query) {
+			out = append(out, j)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) FindByKeyPrefix(prefix string) ([]*model.Job, error) {
+	var out []*model.Job
+	for _, j := range f.jobs {
+		if strings.HasPrefix(j.Key, prefix) {
+			out = append(out, j)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeStore) GetLastKey() (string, error)         { return f.lastKey, nil }
+func (f *fakeStore) SetLastKey(key string) error         { f.lastKey = key; return nil }
+func (f *fakeStore) Insert(job *model.Job) error         { return nil }
+func (f *fakeStore) Update(job *model.Job) error         { return nil }
+func (f *fakeStore) Delete(key string) error             { return nil }
+func (f *fakeStore) ListActive() ([]*model.Job, error)   { return nil, nil }
+func (f *fakeStore) ListCompleted(limit int) ([]*model.Job, error) { return nil, nil }
+
+func job(key, alias string, cmd []string, status model.Status) *model.Job {
+	return &model.Job{Key: key, Alias: alias, Command: cmd, Status: status}
+}
+
+func TestResolveExactKey(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("1234_abcd_make", "", []string{"make"}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "1234_abcd_make")
+	require.NoError(t, err)
+	assert.Equal(t, "1234_abcd_make", j.Key)
+}
+
+func TestResolveAlias(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("1234_abcd_make", "mybuild", []string{"make"}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "mybuild")
+	require.NoError(t, err)
+	assert.Equal(t, "1234_abcd_make", j.Key)
+}
+
+func TestResolveCommandSubstring(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make", "-j8"}, model.StatusCompleted),
+		job("key2", "", []string{"go", "test", "./..."}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "go test")
+	require.NoError(t, err)
+	assert.Equal(t, "key2", j.Key)
+}
+
+func TestResolveCommandSubstringPrefersActive(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusCompleted),
+		job("key2", "", []string{"make"}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "make")
+	require.NoError(t, err)
+	assert.Equal(t, "key2", j.Key)
+}
+
+func TestResolveCommandSubstringFallsBackToCompleted(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusCompleted),
+	}}
+	j, err := ResolveKey(store, "make")
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveKeyPrefix(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("1712912345_abcd_make", "", []string{"make"}, model.StatusCompleted),
+	}}
+	j, err := ResolveKey(store, "1712912345")
+	require.NoError(t, err)
+	assert.Equal(t, "1712912345_abcd_make", j.Key)
+}
+
+func TestResolveDot(t *testing.T) {
+	store := &fakeStore{
+		jobs:    []*model.Job{job("thekey", "", []string{"make"}, model.StatusCompleted)},
+		lastKey: "thekey",
+	}
+	j, err := ResolveKey(store, ".")
+	require.NoError(t, err)
+	assert.Equal(t, "thekey", j.Key)
+}
+
+func TestResolveDotNoJobs(t *testing.T) {
+	store := &fakeStore{}
+	_, err := ResolveKey(store, ".")
+	assert.Error(t, err)
+}
+
+func TestResolveNoMatch(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusRunning),
+	}}
+	_, err := ResolveKey(store, "nonexistent")
+	assert.Error(t, err)
+}
