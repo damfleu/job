@@ -1,0 +1,13 @@
+# Binaries
+job
+*.exe
+
+# Build output
+/dist/
+
+# IDE
+.idea/
+.vscode/
+
+# macOS
+.DS_Store
