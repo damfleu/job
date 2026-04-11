@@ -10,8 +10,9 @@ import (
 )
 
 var rmCmd = &cobra.Command{
-	Use:   "rm [key]",
-	Short: "Delete a completed job",
+	Use:     "rm [key]",
+	Aliases: []string{"remove"},
+	Short:   "Delete a completed job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		j, err := core.ResolveKey(globalDB, keyArg(args))
