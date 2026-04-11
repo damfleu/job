@@ -116,10 +116,11 @@ func printTable(jobs []*model.Job) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleLight)
-	t.AppendHeader(table.Row{"KEY", "STATUS", "COMMAND", "AGE"})
+	t.AppendHeader(table.Row{"KEY", "ALIAS", "STATUS", "COMMAND", "AGE"})
 	for _, j := range jobs {
 		t.AppendRow(table.Row{
-			displayKey(j),
+			j.Key,
+			j.Alias,
 			statusColor(j.Status).Sprint(string(j.Status)),
 			displayCmd(j.Command),
 			displayAge(j),
@@ -129,9 +130,6 @@ func printTable(jobs []*model.Job) {
 }
 
 func displayKey(j *model.Job) string {
-	if j.Alias != "" {
-		return j.Alias
-	}
 	return j.Key
 }
 
