@@ -116,14 +116,16 @@ func printTable(jobs []*model.Job) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.SetStyle(table.StyleLight)
-	t.AppendHeader(table.Row{"KEY", "ALIAS", "STATUS", "COMMAND", "AGE"})
+	t.AppendHeader(table.Row{"KEY", "ALIAS", "STATUS", "RC", "COMMAND", "TIME", "DURATION"})
 	for _, j := range jobs {
 		t.AppendRow(table.Row{
 			j.Key,
 			j.Alias,
 			statusColor(j.Status).Sprint(string(j.Status)),
+			displayExitCode(j),
 			displayCmd(j.Command),
-			displayAge(j),
+			displayTimestamp(j),
+			displayDuration(j),
 		})
 	}
 	t.Render()
@@ -139,6 +141,35 @@ func displayCmd(cmd []string) string {
 		return s[:47] + "..."
 	}
 	return s
+}
+
+func displayExitCode(j *model.Job) string {
+	if j.ExitCode == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d", *j.ExitCode)
+}
+
+func displayTimestamp(j *model.Job) string {
+	switch {
+	case j.StoppedAt != nil:
+		return formatTime(*j.StoppedAt)
+	case j.StartedAt != nil:
+		return formatTime(*j.StartedAt)
+	default:
+		return formatTime(j.CreatedAt)
+	}
+}
+
+func displayDuration(j *model.Job) string {
+	if j.StartedAt == nil {
+		return ""
+	}
+	end := time.Now()
+	if j.StoppedAt != nil {
+		end = *j.StoppedAt
+	}
+	return end.Sub(*j.StartedAt).Round(time.Millisecond).String()
 }
 
 func displayAge(j *model.Job) string {
