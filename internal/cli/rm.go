@@ -10,8 +10,8 @@ import (
 )
 
 var rmCmd = &cobra.Command{
-	Use:     "rm [key]",
-	Aliases: []string{"remove"},
+	Use:     "remove [key]",
+	Aliases: []string{"rm"},
 	Short:   "Delete a completed job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

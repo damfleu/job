@@ -16,8 +16,8 @@ import (
 var lsAll bool
 
 var lsCmd = &cobra.Command{
-	Use:     "ls",
-	Aliases: []string{"list"},
+	Use:     "list",
+	Aliases: []string{"ls"},
 	Short:   "List jobs",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jobs, err := globalDB.ListActive()
