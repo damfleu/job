@@ -14,13 +14,25 @@ import (
 )
 
 var (
-	verbose         bool
-	foreground      bool
-	jobAlias        string
-	afterKeys       []string
-	afterSuccessKeys []string
-	globalDB        *db.DB
+	verbose    bool
+	foreground bool
+	jobAlias   string
+	pendingDeps []model.Dep // accumulates -a/-A in the order they appear
+	globalDB   *db.DB
 )
+
+// depFlag is a pflag.Value that appends deps of a fixed kind to pendingDeps
+// in the order the flags are given on the command line.
+type depFlag struct {
+	kind model.DepKind
+}
+
+func (d depFlag) String() string   { return "" }
+func (d depFlag) Type() string     { return "string" }
+func (d depFlag) Set(val string) error {
+	pendingDeps = append(pendingDeps, model.Dep{Key: val, Kind: d.kind})
+	return nil
+}
 
 var rootCmd = &cobra.Command{
 	Use:           "job",
@@ -61,7 +73,7 @@ func Execute() {
 }
 
 func runJob(command []string) error {
-	deps, err := resolveDeps(afterKeys, afterSuccessKeys)
+	deps, err := resolveDeps(pendingDeps)
 	if err != nil {
 		return err
 	}
@@ -86,31 +98,25 @@ func runJob(command []string) error {
 	return nil
 }
 
+// resolveDeps resolves each pending dep's key via fuzzy matching, preserving order.
+func resolveDeps(pending []model.Dep) ([]model.Dep, error) {
+	resolved := make([]model.Dep, len(pending))
+	for i, dep := range pending {
+		j, err := core.ResolveKey(globalDB, dep.Key)
+		if err != nil {
+			return nil, fmt.Errorf("resolving dep %q: %w", dep.Key, err)
+		}
+		resolved[i] = model.Dep{Key: j.Key, Kind: dep.Kind}
+	}
+	return resolved, nil
+}
+
 // keyArg returns the first element of args, or "." if args is empty.
 func keyArg(args []string) string {
 	if len(args) > 0 {
 		return args[0]
 	}
 	return "."
-}
-
-func resolveDeps(after, afterSuccess []string) ([]model.Dep, error) {
-	var deps []model.Dep
-	for _, k := range after {
-		j, err := core.ResolveKey(globalDB, k)
-		if err != nil {
-			return nil, fmt.Errorf("resolving --after %q: %w", k, err)
-		}
-		deps = append(deps, model.Dep{Key: j.Key, Kind: model.DepAfter})
-	}
-	for _, k := range afterSuccess {
-		j, err := core.ResolveKey(globalDB, k)
-		if err != nil {
-			return nil, fmt.Errorf("resolving --after-success %q: %w", k, err)
-		}
-		deps = append(deps, model.Dep{Key: j.Key, Kind: model.DepAfterSuccess})
-	}
-	return deps, nil
 }
 
 func stateDir() string {
@@ -124,6 +130,6 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print job key and status")
 	rootCmd.Flags().BoolVarP(&foreground, "foreground", "f", false, "run in foreground")
 	rootCmd.Flags().StringVarP(&jobAlias, "key", "k", "", "explicit job key/alias")
-	rootCmd.Flags().StringArrayVarP(&afterKeys, "after", "a", nil, "run after job completes (any exit code)")
-	rootCmd.Flags().StringArrayVarP(&afterSuccessKeys, "after-success", "A", nil, "run only if job succeeds (exit 0)")
+	rootCmd.Flags().VarP(depFlag{model.DepAfter}, "after", "a", "run after job completes (any exit code)")
+	rootCmd.Flags().VarP(depFlag{model.DepAfterSuccess}, "after-success", "A", "run only if job succeeds (exit 0)")
 }
