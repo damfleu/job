@@ -256,6 +256,53 @@ func TestVerboseFlag(t *testing.T) {
 	assert.Contains(t, r.stderr, "done")
 }
 
+func TestDepAliasResolvesToMostRecentJob(t *testing.T) {
+	h := newHarness(t)
+
+	// old completed job with alias "shared-key"
+	h.run("-f", "-k", "shared-key", "--", "echo", "first run")
+
+	// new running job with the same alias
+	h.run("-v", "-k", "shared-key", "--", "sleep", "2")
+
+	// dep should block on the NEW running job, not the old completed one
+	r := h.run("-v", "-a", "shared-key", "--", "echo", "child")
+	childKey := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, childKey)
+
+	time.Sleep(200 * time.Millisecond)
+	j, err := h.db.Get(childKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusBlocked, j.Status, "child should be blocked on the running job, not the old completed one")
+}
+
+func TestDepBlocksUntilDepCompletes(t *testing.T) {
+	h := newHarness(t)
+
+	// spawn a running job and a child that depends on it
+	r1 := h.run("-v", "-k", "dep-job", "--", "sleep", "2")
+	depKey := strings.TrimSpace(r1.stderr)
+	require.NotEmpty(t, depKey)
+
+	r2 := h.run("-v", "-a", "dep-job", "--", "echo", "child")
+	childKey := strings.TrimSpace(r2.stderr)
+	require.NotEmpty(t, childKey)
+
+	// dep job is running, so child should be blocked
+	time.Sleep(200 * time.Millisecond)
+	j, err := h.db.Get(childKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusBlocked, j.Status, "child should be blocked while dep is running")
+
+	// wait for dep to complete, then child should run
+	h.waitFor(depKey, model.StatusCompleted)
+	h.waitFor(childKey, model.StatusCompleted)
+
+	j, err = h.db.Get(childKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.ReasonExited, j.Reason)
+}
+
 func TestDepAfter(t *testing.T) {
 	h := newHarness(t)
 
