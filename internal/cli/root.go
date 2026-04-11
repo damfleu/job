@@ -8,12 +8,15 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 
+	"job/internal/core"
 	"job/internal/db"
 )
 
 var (
-	verbose  bool
-	globalDB *db.DB
+	verbose    bool
+	foreground bool
+	jobAlias   string
+	globalDB   *db.DB
 )
 
 var rootCmd = &cobra.Command{
@@ -21,6 +24,13 @@ var rootCmd = &cobra.Command{
 	Short:         "Run and track background jobs",
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	Args:          cobra.ArbitraryArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 0 {
+			return cmd.Help()
+		}
+		return runJob(args)
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dir := filepath.Join(stateDir(), "db")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -47,6 +57,21 @@ func Execute() {
 	}
 }
 
+func runJob(command []string) error {
+	opts := core.RunOptions{Alias: jobAlias, Verbose: verbose}
+	if foreground {
+		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
+		if err != nil {
+			return err
+		}
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+		return nil
+	}
+	return fmt.Errorf("background mode not yet implemented (use -f for foreground)")
+}
+
 func stateDir() string {
 	if dir := os.Getenv("JOB_STATE_DIR"); dir != "" {
 		return dir
@@ -56,4 +81,6 @@ func stateDir() string {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print job key and status")
+	rootCmd.Flags().BoolVarP(&foreground, "foreground", "f", false, "run in foreground")
+	rootCmd.Flags().StringVarP(&jobAlias, "key", "k", "", "explicit job key/alias")
 }

@@ -1,0 +1,125 @@
+package core
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"os/user"
+	"time"
+
+	"job/internal/db"
+	"job/internal/logfile"
+	"job/internal/model"
+)
+
+// RunOptions configures job creation.
+type RunOptions struct {
+	Alias   string
+	Verbose bool
+}
+
+// CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
+// tees output to the terminal and the log file, and records the result. Returns the command's exit
+// code; infrastructure errors are returned as the error value.
+func CreateAndRunForeground(store db.JobStore, stateDir string, command []string, opts RunOptions) (int, error) {
+	key := model.GenerateKey(command[0])
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		return 0, fmt.Errorf("getting work dir: %w", err)
+	}
+
+	now := time.Now().UTC()
+	j := &model.Job{
+		Key:       key,
+		Alias:     opts.Alias,
+		Command:   command,
+		WorkDir:   workDir,
+		LogFile:   logfile.Path(stateDir, key),
+		Status:    model.StatusPending,
+		Hostname:  hostname(),
+		Username:  username(),
+		CreatedAt: now,
+	}
+
+	if err := store.Insert(j); err != nil {
+		return 0, err
+	}
+	if err := store.SetLastKey(key); err != nil {
+		return 0, err
+	}
+
+	lf, err := logfile.Create(stateDir, key)
+	if err != nil {
+		return 0, err
+	}
+	defer lf.Close()
+
+	startedAt := time.Now().UTC()
+	j.Status = model.StatusRunning
+	j.PID = os.Getpid()
+	j.StartedAt = &startedAt
+	if err := store.Update(j); err != nil {
+		return 0, err
+	}
+
+	if opts.Verbose {
+		fmt.Fprintf(os.Stderr, "%s running\n", key)
+	}
+
+	exitCode, runErr := runForeground(command, workDir, lf)
+
+	stoppedAt := time.Now().UTC()
+	j.Status = model.StatusCompleted
+	j.Reason = model.ReasonExited
+	j.ExitCode = &exitCode
+	j.StoppedAt = &stoppedAt
+	j.PID = 0
+
+	_ = lf.Sync()
+
+	if err := store.Update(j); err != nil {
+		return 0, err
+	}
+
+	if opts.Verbose {
+		fmt.Fprintf(os.Stderr, "%s done (exit %d)\n", key, exitCode)
+	}
+
+	if runErr != nil {
+		return exitCode, nil // non-zero exit is expected, not an infra error
+	}
+	return 0, nil
+}
+
+func runForeground(command []string, workDir string, lf *os.File) (int, error) {
+	cmd := exec.Command(command[0], command[1:]...)
+	cmd.Dir = workDir
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = io.MultiWriter(os.Stdout, lf)
+	cmd.Stderr = io.MultiWriter(os.Stderr, lf)
+
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitCode(), err
+		}
+		return 1, err
+	}
+	return 0, nil
+}
+
+func hostname() string {
+	h, _ := os.Hostname()
+	return h
+}
+
+func username() string {
+	u, err := user.Current()
+	if err != nil {
+		return ""
+	}
+	return u.Username
+}
