@@ -25,7 +25,7 @@ var lsCmd = &cobra.Command{
 			return err
 		}
 
-		if lsAll {
+		if lsAll || len(jobs) == 0 {
 			completed, err := globalDB.ListCompleted(20)
 			if err != nil {
 				return err
