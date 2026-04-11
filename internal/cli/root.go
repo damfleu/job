@@ -22,7 +22,7 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		dir := filepath.Join(xdg.DataHome, "job", "db")
+		dir := filepath.Join(stateDir(), "db")
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("creating state dir: %w", err)
 		}
@@ -45,6 +45,13 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
+}
+
+func stateDir() string {
+	if dir := os.Getenv("JOB_STATE_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join(xdg.DataHome, "job")
 }
 
 func init() {
