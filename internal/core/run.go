@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"syscall"
 	"time"
 
 	"job/internal/db"
@@ -92,6 +93,53 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		return exitCode, nil // non-zero exit is expected, not an infra error
 	}
 	return 0, nil
+}
+
+// CreateAndSpawn creates a job record and launches it as a detached background
+// process (job __exec <key>). Returns immediately; the child updates the DB.
+func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts RunOptions) (string, error) {
+	key := model.GenerateKey(command[0])
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("getting work dir: %w", err)
+	}
+
+	now := time.Now().UTC()
+	j := &model.Job{
+		Key:       key,
+		Alias:     opts.Alias,
+		Command:   command,
+		WorkDir:   workDir,
+		LogFile:   logfile.Path(stateDir, key),
+		Status:    model.StatusPending,
+		Hostname:  hostname(),
+		Username:  username(),
+		CreatedAt: now,
+	}
+
+	if err := store.Insert(j); err != nil {
+		return "", err
+	}
+	if err := store.SetLastKey(key); err != nil {
+		return "", err
+	}
+
+	// pre-create the log file so it exists before __exec opens it
+	lf, err := logfile.Create(stateDir, key)
+	if err != nil {
+		return "", err
+	}
+	lf.Close()
+
+	child := exec.Command(os.Args[0], "__exec", key)
+	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	child.Env = os.Environ()
+	if err := child.Start(); err != nil {
+		return "", fmt.Errorf("spawning background job: %w", err)
+	}
+
+	return key, nil
 }
 
 func runForeground(command []string, workDir string, lf *os.File) (int, error) {

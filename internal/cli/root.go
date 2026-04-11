@@ -69,7 +69,14 @@ func runJob(command []string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("background mode not yet implemented (use -f for foreground)")
+	key, err := core.CreateAndSpawn(globalDB, stateDir(), command, opts)
+	if err != nil {
+		return err
+	}
+	if verbose {
+		fmt.Fprintln(os.Stderr, key)
+	}
+	return nil
 }
 
 func stateDir() string {
