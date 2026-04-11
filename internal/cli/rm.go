@@ -10,7 +10,7 @@ import (
 )
 
 var rmCmd = &cobra.Command{
-	Use:     "rm|remove [key]",
+	Use:     "rm [key]",
 	Aliases: []string{"remove"},
 	Short:   "Delete a completed job",
 	Args:  cobra.MaximumNArgs(1),

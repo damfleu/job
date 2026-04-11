@@ -16,7 +16,7 @@ import (
 var lsAll bool
 
 var lsCmd = &cobra.Command{
-	Use:     "ls|list",
+	Use:     "ls",
 	Aliases: []string{"list"},
 	Short:   "List jobs",
 	RunE: func(cmd *cobra.Command, args []string) error {
