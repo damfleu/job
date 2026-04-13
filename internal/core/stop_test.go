@@ -1,6 +1,8 @@
 package core
 
 import (
+	"os/exec"
+	"syscall"
 	"testing"
 	"time"
 
@@ -41,6 +43,46 @@ func TestStopRunningJob(t *testing.T) {
 	require.NoError(t, StopJob(store, j.Key))
 
 	got, err := store.Get(j.Key)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, got.Status)
+	assert.Equal(t, model.ReasonStopped, got.Reason)
+	assert.NotNil(t, got.StoppedAt)
+	assert.Equal(t, 0, got.PID)
+}
+
+func TestStopKillsProcess(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	cmd := exec.Command("sleep", "60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() { cmd.Process.Kill(); cmd.Wait() }) //nolint:errcheck
+
+	pid := cmd.Process.Pid
+	pgid, err := syscall.Getpgid(pid)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	key := model.GenerateKey("sleep")
+	j := &model.Job{
+		Key:       key,
+		Command:   []string{"sleep", "60"},
+		WorkDir:   t.TempDir(),
+		LogFile:   logfile.Path(stateDir, key),
+		Status:    model.StatusRunning,
+		PID:       pid,
+		PGID:      pgid,
+		CreatedAt: now,
+		StartedAt: &now,
+	}
+	require.NoError(t, store.Insert(j))
+
+	require.NoError(t, StopJob(store, key))
+
+	// process should be dead — Wait returns an error (signal kill)
+	assert.Error(t, cmd.Wait(), "process should have been killed by StopJob")
+
+	got, err := store.Get(key)
 	require.NoError(t, err)
 	assert.Equal(t, model.StatusCompleted, got.Status)
 	assert.Equal(t, model.ReasonStopped, got.Reason)

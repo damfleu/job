@@ -176,6 +176,7 @@ func TestListCompleted(t *testing.T) {
 	require.Len(t, jobs, 3)
 	// most recent first
 	assert.Equal(t, "c3", jobs[0].Key)
+	assert.Equal(t, "c2", jobs[1].Key)
 	assert.Equal(t, "c1", jobs[2].Key)
 
 	// limit

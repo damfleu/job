@@ -3,7 +3,6 @@ package integration
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,7 +24,7 @@ func TestDepAliasResolvesToMostRecentJob(t *testing.T) {
 	childKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, childKey)
 
-	time.Sleep(200 * time.Millisecond)
+	h.waitFor(childKey, model.StatusBlocked)
 	j, err := h.db.Get(childKey)
 	require.NoError(t, err)
 	assert.Equal(t, model.StatusBlocked, j.Status, "child should be blocked on the running job, not the old completed one")
@@ -42,7 +41,7 @@ func TestDepBlocksUntilDepCompletes(t *testing.T) {
 	childKey := strings.TrimSpace(r2.stderr)
 	require.NotEmpty(t, childKey)
 
-	time.Sleep(200 * time.Millisecond)
+	h.waitFor(childKey, model.StatusBlocked)
 	j, err := h.db.Get(childKey)
 	require.NoError(t, err)
 	assert.Equal(t, model.StatusBlocked, j.Status, "child should be blocked while dep is running")

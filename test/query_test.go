@@ -15,8 +15,12 @@ func TestJobShow(t *testing.T) {
 
 	r := h.run("show")
 	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stdout, "echo show test")
-	assert.Contains(t, r.stdout, "completed")
+	assert.Contains(t, r.stdout, "echo show test") // command
+	assert.Contains(t, r.stdout, "completed")       // status
+	assert.Contains(t, r.stdout, "exited")          // reason
+	assert.Contains(t, r.stdout, "Exit code:")
+	assert.Contains(t, r.stdout, "WorkDir:")
+	assert.Contains(t, r.stdout, "Duration:")
 }
 
 func TestJobLog(t *testing.T) {
@@ -47,5 +51,7 @@ func TestJobList(t *testing.T) {
 
 	r := h.run("list")
 	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stdout, "echo")
+	assert.Contains(t, r.stdout, "echo first")
+	assert.Contains(t, r.stdout, "echo second")
+	assert.Contains(t, r.stdout, "COMMAND") // table header
 }
