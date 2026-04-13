@@ -13,7 +13,7 @@ import (
 var logPath bool
 
 var logCmd = &cobra.Command{
-	Use:   "log <key>",
+	Use:   "log [key]",
 	Short: "Display log output for a job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

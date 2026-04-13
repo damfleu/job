@@ -17,7 +17,7 @@ var globalDB *db.DB
 
 var rootCmd = &cobra.Command{
 	Use:           "job",
-	Short:         "Run and track background jobs",
+	Short:         "Run and track jobs",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,6 +40,7 @@ var rootCmd = &cobra.Command{
 			globalDB.Close()
 		}
 	},
+	CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true},
 }
 
 func Execute() {

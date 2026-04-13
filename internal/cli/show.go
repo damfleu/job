@@ -12,7 +12,7 @@ import (
 )
 
 var showCmd = &cobra.Command{
-	Use:   "show <key>",
+	Use:   "show [key]",
 	Short: "Show full details for a job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -13,7 +13,7 @@ var retryFlags RunFlags
 
 var retryCmd = &cobra.Command{
 	Use:   "retry [key]",
-	Short: "Re-run a completed job with its original command and working directory",
+	Short: "Re-run a completed job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		j, err := core.ResolveKey(globalDB, keyArg(args))
