@@ -58,29 +58,7 @@ func Execute() {
 }
 
 func runJob(command []string) error {
-	deps, err := resolveDeps(runFlags.Deps)
-	if err != nil {
-		return err
-	}
-	opts := core.RunOptions{Alias: runFlags.Alias, Verbose: verbose, Deps: deps}
-	if runFlags.Foreground {
-		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
-		if err != nil {
-			return err
-		}
-		if exitCode != 0 {
-			os.Exit(exitCode)
-		}
-		return nil
-	}
-	key, err := core.CreateAndSpawn(globalDB, stateDir(), command, opts)
-	if err != nil {
-		return err
-	}
-	if verbose {
-		fmt.Fprintln(os.Stderr, key)
-	}
-	return nil
+	return launchJob(command, "", runFlags)
 }
 
 // resolveDeps resolves each pending dep's key via fuzzy matching, preserving order.

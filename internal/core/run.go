@@ -20,6 +20,7 @@ type RunOptions struct {
 	Alias   string
 	Verbose bool
 	Deps    []model.Dep
+	WorkDir string // if empty, defaults to os.Getwd()
 }
 
 // CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
@@ -28,9 +29,13 @@ type RunOptions struct {
 func CreateAndRunForeground(store db.JobStore, stateDir string, command []string, opts RunOptions) (int, error) {
 	key := model.GenerateKey(command[0])
 
-	workDir, err := os.Getwd()
-	if err != nil {
-		return 0, fmt.Errorf("getting work dir: %w", err)
+	workDir := opts.WorkDir
+	if workDir == "" {
+		var err error
+		workDir, err = os.Getwd()
+		if err != nil {
+			return 0, fmt.Errorf("getting work dir: %w", err)
+		}
 	}
 
 	now := time.Now().UTC()
@@ -120,9 +125,13 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts RunOptions) (string, error) {
 	key := model.GenerateKey(command[0])
 
-	workDir, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("getting work dir: %w", err)
+	workDir := opts.WorkDir
+	if workDir == "" {
+		var err error
+		workDir, err = os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("getting work dir: %w", err)
+		}
 	}
 
 	now := time.Now().UTC()

@@ -67,9 +67,16 @@ type result struct {
 }
 
 func (h *harness) run(args ...string) result {
+	return h.runFrom("", args...)
+}
+
+func (h *harness) runFrom(dir string, args ...string) result {
 	h.t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir)
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -374,6 +381,133 @@ func TestDepMixedOrder(t *testing.T) {
 	assert.Equal(t, model.DepAfterSuccess, j.Deps[0].Kind)
 	assert.Equal(t, model.DepAfter, j.Deps[1].Kind)
 	assert.Equal(t, model.DepAfterSuccess, j.Deps[2].Kind)
+}
+
+func TestRetryBasic(t *testing.T) {
+	h := newHarness(t)
+
+	// run original job
+	h.run("-f", "--", "echo", "original")
+	orig := h.lastJob()
+	require.Equal(t, model.StatusCompleted, orig.Status)
+
+	// retry it
+	r := h.run("-v", "retry", orig.Key)
+	assert.Equal(t, 0, r.exitCode)
+	retryKey := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, retryKey)
+	assert.NotEqual(t, orig.Key, retryKey, "retry should produce a new key")
+
+	h.waitFor(retryKey, model.StatusCompleted)
+
+	retried, err := h.db.Get(retryKey)
+	require.NoError(t, err)
+	assert.Equal(t, orig.Command, retried.Command)
+	assert.Equal(t, model.StatusCompleted, retried.Status)
+	assert.Equal(t, model.ReasonExited, retried.Reason)
+	require.NotNil(t, retried.ExitCode)
+	assert.Equal(t, 0, *retried.ExitCode)
+}
+
+func TestRetryPreservesWorkDir(t *testing.T) {
+	h := newHarness(t)
+	origDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+
+	// run original job from a specific directory
+	h.runFrom(origDir, "-f", "--", "echo", "in-dir")
+	orig := h.lastJob()
+	assert.Equal(t, origDir, orig.WorkDir)
+
+	// retry from a different directory — workdir should match original
+	otherDir := t.TempDir()
+	r := h.runFrom(otherDir, "-v", "retry", orig.Key)
+	retryKey := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, retryKey)
+
+	h.waitFor(retryKey, model.StatusCompleted)
+
+	retried, err := h.db.Get(retryKey)
+	require.NoError(t, err)
+	assert.Equal(t, origDir, retried.WorkDir, "retry should use the original job's working directory")
+}
+
+func TestRetryForeground(t *testing.T) {
+	h := newHarness(t)
+	h.run("-f", "--", "echo", "fg retry")
+	orig := h.lastJob()
+
+	r := h.run("-f", "retry", orig.Key)
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "fg retry")
+
+	retried := h.lastJob()
+	assert.NotEqual(t, orig.Key, retried.Key)
+	assert.Equal(t, model.StatusCompleted, retried.Status)
+}
+
+func TestRetryNonZeroExit(t *testing.T) {
+	h := newHarness(t)
+	h.run("-f", "--", "false")
+	orig := h.lastJob()
+
+	r := h.run("-f", "retry", orig.Key)
+	assert.Equal(t, 1, r.exitCode)
+
+	retried := h.lastJob()
+	assert.NotEqual(t, orig.Key, retried.Key)
+	require.NotNil(t, retried.ExitCode)
+	assert.Equal(t, 1, *retried.ExitCode)
+}
+
+func TestRetryWithAlias(t *testing.T) {
+	h := newHarness(t)
+	h.run("-f", "--", "echo", "aliased retry")
+	orig := h.lastJob()
+
+	h.run("-f", "-k", "retry-alias", "retry", orig.Key)
+
+	retried := h.lastJob()
+	assert.Equal(t, "retry-alias", retried.Alias)
+}
+
+func TestRetryWithDep(t *testing.T) {
+	h := newHarness(t)
+
+	// original job (already completed)
+	h.run("-f", "--", "echo", "original")
+	orig := h.lastJob()
+
+	// a running job to use as a dep
+	r := h.run("-v", "--", "sleep", "5")
+	depKey := strings.TrimSpace(r.stderr)
+	h.waitFor(depKey, model.StatusRunning)
+
+	// retry the original, but block on the running dep
+	r2 := h.run("-v", "-a", depKey, "retry", orig.Key)
+	retryKey := strings.TrimSpace(r2.stderr)
+	require.NotEmpty(t, retryKey)
+
+	time.Sleep(200 * time.Millisecond)
+	retried, err := h.db.Get(retryKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusBlocked, retried.Status, "retry should be blocked on its dep")
+
+	h.run("stop", depKey)
+	h.waitFor(retryKey, model.StatusCompleted)
+}
+
+func TestRetryRequiresCompleted(t *testing.T) {
+	h := newHarness(t)
+
+	r := h.run("-v", "--", "sleep", "5")
+	key := strings.TrimSpace(r.stderr)
+	h.waitFor(key, model.StatusRunning)
+
+	r2 := h.run("retry", key)
+	assert.NotEqual(t, 0, r2.exitCode, "retrying a running job should fail")
+
+	h.run("stop", key)
 }
 
 // projectRoot walks up from the current directory to find the go.mod.

@@ -1,6 +1,10 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+
+	"job/internal/core"
 	"job/internal/model"
 
 	"github.com/spf13/cobra"
@@ -24,6 +28,35 @@ func (d depFlag) String() string { return "" }
 func (d depFlag) Type() string   { return "string" }
 func (d depFlag) Set(val string) error {
 	*d.deps = append(*d.deps, model.Dep{Key: val, Kind: d.kind})
+	return nil
+}
+
+// launchJob creates and starts a job using command and workDir (empty = cwd),
+// honouring the foreground/background choice in f. It is shared by the root
+// run path and retry.
+func launchJob(command []string, workDir string, f RunFlags) error {
+	deps, err := resolveDeps(f.Deps)
+	if err != nil {
+		return err
+	}
+	opts := core.RunOptions{Alias: f.Alias, Verbose: verbose, Deps: deps, WorkDir: workDir}
+	if f.Foreground {
+		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
+		if err != nil {
+			return err
+		}
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+		return nil
+	}
+	key, err := core.CreateAndSpawn(globalDB, stateDir(), command, opts)
+	if err != nil {
+		return err
+	}
+	if verbose {
+		fmt.Fprintln(os.Stderr, key)
+	}
 	return nil
 }
 
