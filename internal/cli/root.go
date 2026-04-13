@@ -15,7 +15,6 @@ import (
 
 var (
 	verbose  bool
-	runFlags RunFlags
 	globalDB *db.DB
 )
 
@@ -24,12 +23,8 @@ var rootCmd = &cobra.Command{
 	Short:         "Run and track background jobs",
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	Args:          cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 0 {
-			return cmd.Help()
-		}
-		return runJob(args)
+		return cmd.Help()
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dir := filepath.Join(stateDir(), "db")
@@ -55,10 +50,6 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
-}
-
-func runJob(command []string) error {
-	return launchJob(command, "", runFlags)
 }
 
 // resolveDeps resolves each pending dep's key via fuzzy matching, preserving order.
@@ -91,5 +82,4 @@ func stateDir() string {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print job key and status")
-	addRunFlags(rootCmd, &runFlags)
 }

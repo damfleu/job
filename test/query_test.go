@@ -11,7 +11,7 @@ import (
 
 func TestJobShow(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "show test")
+	h.run("run", "-f", "echo", "show test")
 
 	r := h.run("show")
 	assert.Equal(t, 0, r.exitCode)
@@ -25,7 +25,7 @@ func TestJobShow(t *testing.T) {
 
 func TestJobLog(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "log test output")
+	h.run("run", "-f", "echo", "log test output")
 
 	r := h.run("log")
 	assert.Equal(t, 0, r.exitCode)
@@ -34,7 +34,7 @@ func TestJobLog(t *testing.T) {
 
 func TestJobLogPath(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "hi")
+	h.run("run", "-f", "echo", "hi")
 
 	r := h.run("log", "-p")
 	assert.Equal(t, 0, r.exitCode)
@@ -46,8 +46,8 @@ func TestJobLogPath(t *testing.T) {
 
 func TestJobList(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "first")
-	h.run("-f", "--", "echo", "second")
+	h.run("run", "-f", "echo", "first")
+	h.run("run", "-f", "echo", "second")
 
 	r := h.run("list")
 	assert.Equal(t, 0, r.exitCode)
@@ -58,8 +58,8 @@ func TestJobList(t *testing.T) {
 
 func TestJobListFilter(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "keep this")
-	h.run("-f", "--", "false")
+	h.run("run", "-f", "echo", "keep this")
+	h.run("run", "-f", "false")
 
 	r := h.run("list", "-f", "echo")
 	assert.Equal(t, 0, r.exitCode)
@@ -70,7 +70,7 @@ func TestJobListFilter(t *testing.T) {
 func TestJobListLimit(t *testing.T) {
 	h := newHarness(t)
 	for range 5 {
-		h.run("-f", "--", "echo", "job")
+		h.run("run", "-f", "echo", "job")
 	}
 
 	r := h.run("list", "-n", "3")
@@ -87,9 +87,9 @@ func TestJobListInvalidFilter(t *testing.T) {
 func TestJobListRegex(t *testing.T) {
 	h := newHarness(t)
 	// three distinct commands
-	h.run("-f", "--", "echo", "alpha")
-	h.run("-f", "--", "echo", "beta")
-	h.run("-f", "--", "sh", "-c", "true")
+	h.run("run", "-f", "echo", "alpha")
+	h.run("run", "-f", "echo", "beta")
+	h.run("run", "-f", "sh", "-c", "true")
 
 	// anchored: only commands starting with "echo"
 	r := h.run("list", "-f", "^echo")

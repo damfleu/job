@@ -15,11 +15,11 @@ import (
 func TestRetryBasic(t *testing.T) {
 	h := newHarness(t)
 
-	h.run("-f", "--", "echo", "original")
+	h.run("run", "-f", "echo", "original")
 	orig := h.lastJob()
 	require.Equal(t, model.StatusCompleted, orig.Status)
 
-	r := h.run("-v", "retry", orig.Key)
+	r := h.run("retry", "-v", orig.Key)
 	assert.Equal(t, 0, r.exitCode)
 	retryKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, retryKey)
@@ -41,13 +41,13 @@ func TestRetryPreservesWorkDir(t *testing.T) {
 	origDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
 
-	h.runFrom(origDir, "-f", "--", "echo", "in-dir")
+	h.runFrom(origDir, "run", "-f", "echo", "in-dir")
 	orig := h.lastJob()
 	assert.Equal(t, origDir, orig.WorkDir)
 
 	// retry from a different directory — workdir should match original
 	otherDir := t.TempDir()
-	r := h.runFrom(otherDir, "-v", "retry", orig.Key)
+	r := h.runFrom(otherDir, "retry", "-v", orig.Key)
 	retryKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, retryKey)
 
@@ -60,10 +60,10 @@ func TestRetryPreservesWorkDir(t *testing.T) {
 
 func TestRetryForeground(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "fg retry")
+	h.run("run", "-f", "echo", "fg retry")
 	orig := h.lastJob()
 
-	r := h.run("-f", "retry", orig.Key)
+	r := h.run("retry", "-f", orig.Key)
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "fg retry")
 
@@ -74,10 +74,10 @@ func TestRetryForeground(t *testing.T) {
 
 func TestRetryNonZeroExit(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "false")
+	h.run("run", "-f", "false")
 	orig := h.lastJob()
 
-	r := h.run("-f", "retry", orig.Key)
+	r := h.run("retry", "-f", orig.Key)
 	assert.Equal(t, 1, r.exitCode)
 
 	retried := h.lastJob()
@@ -88,10 +88,10 @@ func TestRetryNonZeroExit(t *testing.T) {
 
 func TestRetryWithAlias(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "aliased retry")
+	h.run("run", "-f", "echo", "aliased retry")
 	orig := h.lastJob()
 
-	h.run("-f", "-k", "retry-alias", "retry", orig.Key)
+	h.run("retry", "-f", "-k", "retry-alias", orig.Key)
 
 	retried := h.lastJob()
 	assert.Equal(t, "retry-alias", retried.Alias)
@@ -100,14 +100,14 @@ func TestRetryWithAlias(t *testing.T) {
 func TestRetryWithDep(t *testing.T) {
 	h := newHarness(t)
 
-	h.run("-f", "--", "echo", "original")
+	h.run("run", "-f", "echo", "original")
 	orig := h.lastJob()
 
-	r := h.run("-v", "--", "sleep", "5")
+	r := h.run("run", "-v", "sleep", "5")
 	depKey := strings.TrimSpace(r.stderr)
 	h.waitFor(depKey, model.StatusRunning)
 
-	r2 := h.run("-v", "-a", depKey, "retry", orig.Key)
+	r2 := h.run("retry", "-v", "-a", depKey, orig.Key)
 	retryKey := strings.TrimSpace(r2.stderr)
 	require.NotEmpty(t, retryKey)
 
@@ -123,7 +123,7 @@ func TestRetryWithDep(t *testing.T) {
 func TestRetryRequiresCompleted(t *testing.T) {
 	h := newHarness(t)
 
-	r := h.run("-v", "--", "sleep", "5")
+	r := h.run("run", "-v", "sleep", "5")
 	key := strings.TrimSpace(r.stderr)
 	h.waitFor(key, model.StatusRunning)
 

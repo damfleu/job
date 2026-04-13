@@ -13,7 +13,7 @@ import (
 
 func TestForegroundJob(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("-f", "--", "echo", "hello integration")
+	r := h.run("run", "-f", "echo", "hello integration")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "hello integration")
 
@@ -30,7 +30,7 @@ func TestForegroundJob(t *testing.T) {
 
 func TestForegroundJobNonZeroExit(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("-f", "--", "false")
+	r := h.run("run", "-f", "false")
 	assert.Equal(t, 1, r.exitCode)
 
 	j := h.lastJob()
@@ -41,7 +41,7 @@ func TestForegroundJobNonZeroExit(t *testing.T) {
 
 func TestBackgroundJob(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("-v", "--", "echo", "bg hello")
+	r := h.run("run", "-v", "echo", "bg hello")
 	assert.Equal(t, 0, r.exitCode)
 	key := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, key)
@@ -61,7 +61,7 @@ func TestBackgroundJob(t *testing.T) {
 
 func TestVerboseFlag(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("-v", "-f", "--", "echo", "verbose")
+	r := h.run("run", "-v", "-f", "echo", "verbose")
 	assert.Contains(t, r.stderr, "running")
 	assert.Contains(t, r.stderr, "done")
 }

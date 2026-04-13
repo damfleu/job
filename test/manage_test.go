@@ -13,7 +13,7 @@ import (
 
 func TestJobStop(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("-v", "--", "sleep", "60")
+	r := h.run("run", "-v", "sleep", "60")
 	key := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, key)
 
@@ -28,7 +28,7 @@ func TestJobStop(t *testing.T) {
 
 func TestJobRemove(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "bye")
+	h.run("run", "-f", "echo", "bye")
 
 	j := h.lastJob()
 	h.run("remove", j.Key)
@@ -39,7 +39,7 @@ func TestJobRemove(t *testing.T) {
 
 func TestJobAlias(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "-k", "mybuild", "--", "echo", "aliased")
+	h.run("run", "-f", "-k", "mybuild", "echo", "aliased")
 
 	j := h.lastJob()
 	assert.Equal(t, "mybuild", j.Alias)
@@ -51,7 +51,7 @@ func TestJobAlias(t *testing.T) {
 
 func TestDotResolution(t *testing.T) {
 	h := newHarness(t)
-	h.run("-f", "--", "echo", "dot test")
+	h.run("run", "-f", "echo", "dot test")
 
 	r := h.run("show", ".")
 	assert.Equal(t, 0, r.exitCode)
