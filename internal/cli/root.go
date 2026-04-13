@@ -13,10 +13,7 @@ import (
 	"job/internal/model"
 )
 
-var (
-	verbose  bool
-	globalDB *db.DB
-)
+var globalDB *db.DB
 
 var rootCmd = &cobra.Command{
 	Use:           "job",
@@ -80,6 +77,3 @@ func stateDir() string {
 	return filepath.Join(xdg.DataHome, "job")
 }
 
-func init() {
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print job key and status")
-}

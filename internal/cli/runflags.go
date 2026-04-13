@@ -14,6 +14,7 @@ import (
 // like retry that also launch jobs (foreground, watch, alias, deps).
 type RunFlags struct {
 	Foreground bool
+	Verbose    bool
 	Alias      string
 	Deps       []model.Dep // accumulates -a/-A in declaration order
 }
@@ -39,7 +40,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 	if err != nil {
 		return err
 	}
-	opts := core.RunOptions{Alias: f.Alias, Verbose: verbose, Deps: deps, WorkDir: workDir}
+	opts := core.RunOptions{Alias: f.Alias, Verbose: f.Verbose, Deps: deps, WorkDir: workDir}
 	if f.Foreground {
 		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
 		if err != nil {
@@ -54,7 +55,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 	if err != nil {
 		return err
 	}
-	if verbose {
+	if f.Verbose {
 		fmt.Fprintln(os.Stderr, key)
 	}
 	return nil
@@ -63,6 +64,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 // addRunFlags registers the shared job-launch flags onto cmd, writing into f.
 func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	cmd.Flags().BoolVarP(&f.Foreground, "foreground", "f", false, "run in foreground")
+	cmd.Flags().BoolVarP(&f.Verbose, "verbose", "v", false, "print job key")
 	cmd.Flags().StringVarP(&f.Alias, "key", "k", "", "explicit job key/alias")
 	cmd.Flags().VarP(depFlag{model.DepAfter, &f.Deps}, "after", "a", "run after job completes (any exit code)")
 	cmd.Flags().VarP(depFlag{model.DepAfterSuccess, &f.Deps}, "after-success", "A", "run only if job succeeds (exit 0)")
