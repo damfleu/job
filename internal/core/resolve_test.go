@@ -139,6 +139,28 @@ func TestResolveDotNoJobs(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestResolveCommandSubstringMultipleActive(t *testing.T) {
+	// two active jobs match — first non-completed result from the store is returned
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make", "build"}, model.StatusRunning),
+		job("key2", "", []string{"make", "test"}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "make")
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveKeyPrefixMultipleMatches(t *testing.T) {
+	// multiple keys share the same prefix — first result from the store is returned
+	store := &fakeStore{jobs: []*model.Job{
+		job("1712912345_aaaa_make", "", []string{"make"}, model.StatusCompleted),
+		job("1712912345_bbbb_go", "", []string{"go"}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "1712912345")
+	require.NoError(t, err)
+	assert.Equal(t, "1712912345_aaaa_make", j.Key)
+}
+
 func TestResolveNoMatch(t *testing.T) {
 	store := &fakeStore{jobs: []*model.Job{
 		job("key1", "", []string{"make"}, model.StatusRunning),

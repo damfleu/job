@@ -90,6 +90,30 @@ func TestStopKillsProcess(t *testing.T) {
 	assert.Equal(t, 0, got.PID)
 }
 
+func TestStopBlockedJob(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	key := model.GenerateKey("sleep")
+	now := time.Now().UTC()
+	j := &model.Job{
+		Key:       key,
+		Command:   []string{"sleep", "60"},
+		WorkDir:   t.TempDir(),
+		LogFile:   logfile.Path(stateDir, key),
+		Status:    model.StatusBlocked,
+		CreatedAt: now,
+	}
+	require.NoError(t, store.Insert(j))
+
+	require.NoError(t, StopJob(store, key))
+
+	got, err := store.Get(key)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, got.Status)
+	assert.Equal(t, model.ReasonStopped, got.Reason)
+	assert.NotNil(t, got.StoppedAt)
+}
+
 func TestStopAlreadyCompleted(t *testing.T) {
 	store, stateDir := setupRun(t)
 

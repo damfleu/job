@@ -226,6 +226,43 @@ func TestFindByAliasMostRecent(t *testing.T) {
 	assert.Equal(t, "new_key", got.Key, "should return most recently created job")
 }
 
+func TestFindByKeyPrefix(t *testing.T) {
+	db := openMemDB(t)
+	require.NoError(t, db.Insert(makeJob("1712912345_abcd_make")))
+
+	results, err := db.FindByKeyPrefix("1712912345")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "1712912345_abcd_make", results[0].Key)
+}
+
+func TestFindByKeyPrefixMultipleOrderedByNewest(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	older := makeJob("1712912345_aaaa_make")
+	older.CreatedAt = now.Add(-time.Minute).Truncate(time.Millisecond)
+	newer := makeJob("1712912345_bbbb_go")
+	newer.CreatedAt = now.Truncate(time.Millisecond)
+
+	require.NoError(t, db.Insert(older))
+	require.NoError(t, db.Insert(newer))
+
+	results, err := db.FindByKeyPrefix("1712912345")
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Equal(t, "1712912345_bbbb_go", results[0].Key, "most recently created should be first")
+}
+
+func TestFindByKeyPrefixNoMatch(t *testing.T) {
+	db := openMemDB(t)
+	require.NoError(t, db.Insert(makeJob("1712912345_abcd_make")))
+
+	results, err := db.FindByKeyPrefix("9999999999")
+	require.NoError(t, err)
+	assert.Empty(t, results)
+}
+
 func TestLastKey(t *testing.T) {
 	db := openMemDB(t)
 
