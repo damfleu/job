@@ -8,10 +8,15 @@ import (
 	"job/internal/model"
 )
 
-func (d *DB) ListActive() ([]*model.Job, error) {
-	rows, err := d.db.Query(
-		`SELECT `+jobCols+` FROM jobs WHERE status != 'completed' ORDER BY created_at`,
-	)
+func (d *DB) ListActive(filter string) ([]*model.Job, error) {
+	query := `SELECT ` + jobCols + ` FROM jobs WHERE status != 'completed'`
+	args := []any{}
+	if filter != "" {
+		query += ` AND cmd_str(command) REGEXP ?`
+		args = append(args, filter)
+	}
+	query += ` ORDER BY created_at`
+	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: list active: %w", err)
 	}
@@ -19,11 +24,16 @@ func (d *DB) ListActive() ([]*model.Job, error) {
 	return scanJobs(rows)
 }
 
-func (d *DB) ListCompleted(limit int) ([]*model.Job, error) {
-	rows, err := d.db.Query(
-		`SELECT `+jobCols+` FROM jobs WHERE status = 'completed' ORDER BY stopped_at DESC LIMIT ?`,
-		limit,
-	)
+func (d *DB) ListCompleted(limit int, filter string) ([]*model.Job, error) {
+	query := `SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed'`
+	args := []any{}
+	if filter != "" {
+		query += ` AND cmd_str(command) REGEXP ?`
+		args = append(args, filter)
+	}
+	query += ` ORDER BY stopped_at DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: list completed: %w", err)
 	}

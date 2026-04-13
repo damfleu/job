@@ -2,12 +2,55 @@ package db
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"regexp"
+	"strings"
 
 	"job/internal/model"
 
-	_ "modernc.org/sqlite"
+	"modernc.org/sqlite"
 )
+
+func init() {
+	// regexp(pattern, value) — used by the REGEXP operator: `col REGEXP ?`
+	sqlite.MustRegisterDeterministicScalarFunction(
+		"regexp",
+		2,
+		func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			pattern, ok := args[0].(string)
+			if !ok {
+				return nil, errors.New("regexp: pattern must be text")
+			}
+			s, ok := args[1].(string)
+			if !ok {
+				return nil, errors.New("regexp: value must be text")
+			}
+			matched, err := regexp.MatchString(pattern, s)
+			if err != nil {
+				return nil, fmt.Errorf("regexp: %w", err)
+			}
+			return matched, nil
+		},
+	)
+
+	// cmd_str(command_json) — converts the JSON command array to a display string
+	// so that REGEXP filters match against "make -j8" rather than `["make","-j8"]`.
+	sqlite.MustRegisterDeterministicScalarFunction(
+		"cmd_str",
+		1,
+		func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			s, _ := args[0].(string)
+			var parts []string
+			if err := json.Unmarshal([]byte(s), &parts); err != nil {
+				return s, nil
+			}
+			return strings.Join(parts, " "), nil
+		},
+	)
+}
 
 // ErrNotFound is returned by Get when no job matches the key.
 var ErrNotFound = errors.New("db: job not found")
@@ -18,8 +61,8 @@ type JobStore interface {
 	Get(key string) (*model.Job, error)
 	Update(job *model.Job) error
 	Delete(key string) error
-	ListActive() ([]*model.Job, error)
-	ListCompleted(limit int) ([]*model.Job, error)
+	ListActive(filter string) ([]*model.Job, error)
+	ListCompleted(limit int, filter string) ([]*model.Job, error)
 	Search(query string) ([]*model.Job, error)
 	FindByAlias(alias string) (*model.Job, error)
 	FindByKeyPrefix(prefix string) ([]*model.Job, error)

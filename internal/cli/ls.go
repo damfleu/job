@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -15,14 +16,24 @@ import (
 	"job/internal/model"
 )
 
-var lsAll bool
+var (
+	lsAll    bool
+	lsFilter string
+	lsLimit  int
+)
 
 var lsCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "List jobs",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		active, err := globalDB.ListActive()
+		if lsFilter != "" {
+			if _, err := regexp.Compile(lsFilter); err != nil {
+				return fmt.Errorf("invalid filter: %w", err)
+			}
+		}
+
+		active, err := globalDB.ListActive(lsFilter)
 		if err != nil {
 			return err
 		}
@@ -32,10 +43,10 @@ var lsCmd = &cobra.Command{
 			var jobs []*model.Job
 			if !lsAll {
 				// fallback: completed only
-				jobs, err = globalDB.ListCompleted(20)
+				jobs, err = globalDB.ListCompleted(lsLimit, lsFilter)
 			} else {
 				jobs = append(active, func() []*model.Job {
-					c, _ := globalDB.ListCompleted(20)
+					c, _ := globalDB.ListCompleted(lsLimit, lsFilter)
 					return c
 				}()...)
 			}
@@ -58,6 +69,8 @@ var lsCmd = &cobra.Command{
 
 func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
+	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
+	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", 20, "max completed jobs to show")
 	rootCmd.AddCommand(lsCmd)
 }
 
