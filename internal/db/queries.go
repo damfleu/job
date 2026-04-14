@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"job/internal/model"
 )
@@ -36,6 +37,18 @@ func (d *DB) ListCompleted(limit int, filter string) ([]*model.Job, error) {
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: list completed: %w", err)
+	}
+	defer rows.Close()
+	return scanJobs(rows)
+}
+
+func (d *DB) ListCompletedBefore(t time.Time) ([]*model.Job, error) {
+	rows, err := d.db.Query(
+		`SELECT `+jobCols+` FROM jobs WHERE status = 'completed' AND stopped_at < ? ORDER BY stopped_at`,
+		t.UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list completed before: %w", err)
 	}
 	defer rows.Close()
 	return scanJobs(rows)

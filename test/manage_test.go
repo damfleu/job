@@ -56,6 +56,54 @@ func TestJobAlias(t *testing.T) {
 	assert.Contains(t, r.stdout, "mybuild")
 }
 
+func TestPruneOlderThan(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "one")
+	h.run("run", "-f", "echo", "two")
+
+	jobs, err := h.db.ListCompleted(10, "")
+	require.NoError(t, err)
+	require.Len(t, jobs, 2)
+	logFiles := []string{jobs[0].LogFile, jobs[1].LogFile}
+
+	r := h.run("prune", "--older-than", "0s")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "pruned 2 job(s)")
+
+	remaining, err := h.db.ListCompleted(10, "")
+	require.NoError(t, err)
+	assert.Empty(t, remaining)
+
+	for _, lf := range logFiles {
+		_, err := os.Stat(lf)
+		assert.True(t, os.IsNotExist(err), "log file %s should be deleted", lf)
+	}
+}
+
+func TestPruneBefore(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "first")
+	j1 := h.lastJob()
+	h.run("run", "-f", "echo", "second")
+	j2 := h.lastJob()
+
+	r := h.run("prune", "--before", j2.Key)
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "pruned 1 job(s)")
+
+	_, err := h.db.Get(j1.Key)
+	assert.ErrorIs(t, err, db.ErrNotFound, "j1 should be pruned")
+
+	_, err = h.db.Get(j2.Key)
+	assert.NoError(t, err, "j2 should remain")
+}
+
+func TestPruneRequiresFlag(t *testing.T) {
+	h := newHarness(t)
+	r := h.run("prune")
+	assert.NotEqual(t, 0, r.exitCode)
+}
+
 func TestDotResolution(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "echo", "dot test")

@@ -312,6 +312,27 @@ func TestFindByKeyPrefixNoMatch(t *testing.T) {
 	assert.Empty(t, results)
 }
 
+func TestListCompletedBefore(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	for i, key := range []string{"old1", "old2", "new1"} {
+		j := makeJob(key)
+		j.Status = model.StatusCompleted
+		t2 := now.Add(time.Duration(i) * time.Hour).Truncate(time.Millisecond)
+		j.StoppedAt = &t2
+		require.NoError(t, db.Insert(j))
+	}
+	require.NoError(t, db.Insert(makeJob("active1"))) // not completed, must be excluded
+
+	cutoff := now.Add(2 * time.Hour) // old1 and old2 are before this, new1 is not
+	jobs, err := db.ListCompletedBefore(cutoff)
+	require.NoError(t, err)
+	require.Len(t, jobs, 2)
+	keys := []string{jobs[0].Key, jobs[1].Key}
+	assert.ElementsMatch(t, []string{"old1", "old2"}, keys)
+}
+
 func TestLastKey(t *testing.T) {
 	db := openMemDB(t)
 
