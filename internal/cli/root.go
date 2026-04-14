@@ -78,6 +78,13 @@ func keyArg(args []string) string {
 	return "."
 }
 
+func printDeleted(cmd *cobra.Command, key, logFile string) {
+	fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", key)
+	if logFile != "" {
+		fmt.Fprintf(cmd.OutOrStdout(), "  log: %s\n", logFile)
+	}
+}
+
 func configDir() string {
 	if dir := os.Getenv("JOB_CONFIG_DIR"); dir != "" {
 		return dir

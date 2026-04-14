@@ -59,6 +59,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		if err := core.DeleteJob(globalDB, j); err != nil {
 			return fmt.Errorf("deleting %s: %w", j.Key, err)
 		}
+		printDeleted(cmd, j.Key, j.LogFile)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "pruned %d job(s)\n", len(jobs))
 	return nil
