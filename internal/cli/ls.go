@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/charmbracelet/lipgloss/tree"
-	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/jedib0t/go-pretty/v6/text"
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
 	"job/internal/config"
@@ -132,22 +132,40 @@ func nodeLabel(j *model.Job) string {
 }
 
 func printTable(jobs []*model.Job) {
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-	t.SetStyle(table.StyleLight)
-	t.AppendHeader(table.Row{"KEY", "ALIAS", "STATUS", "RC", "COMMAND", "TIME", "DURATION"})
+	termWidth, _, _ := term.GetSize(os.Stdout.Fd())
+
+	headerStyle := lipgloss.NewStyle().Bold(true)
+	t := table.New().
+		Border(lipgloss.NormalBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			if col == 2 {
+				return statusStyle(jobs[row].Status)
+			}
+			return lipgloss.NewStyle()
+		}).
+		Headers("KEY", "ALIAS", "STATUS", "RC", "COMMAND", "TIME", "DURATION")
+
 	for _, j := range jobs {
-		t.AppendRow(table.Row{
+		t.Row(
 			j.Key,
 			j.Alias,
-			statusColor(j.Status).Sprint(string(j.Status)),
+			string(j.Status),
 			displayExitCode(j),
 			displayCmd(j.Command),
 			displayTimestamp(j),
 			displayDuration(j),
-		})
+		)
 	}
-	t.Render()
+
+	if termWidth > 0 {
+		t.Width(termWidth)
+	}
+
+	fmt.Fprintln(os.Stdout, t)
 }
 
 func displayKey(j *model.Job) string {
@@ -155,9 +173,12 @@ func displayKey(j *model.Job) string {
 }
 
 func displayCmd(cmd []string) string {
-	s := strings.Join(cmd, " ")
-	if len(s) > 50 {
-		return s[:47] + "..."
+	return truncate(strings.Join(cmd, " "), 60)
+}
+
+func truncate(s string, max int) string {
+	if len(s) > max {
+		return s[:max-3] + "..."
 	}
 	return s
 }
@@ -226,16 +247,3 @@ func statusStyle(s model.Status) lipgloss.Style {
 	}
 }
 
-// statusColor is used in the table view (go-pretty colors).
-func statusColor(s model.Status) text.Colors {
-	switch s {
-	case model.StatusRunning:
-		return text.Colors{text.FgGreen}
-	case model.StatusBlocked:
-		return text.Colors{text.FgYellow}
-	case model.StatusCompleted:
-		return text.Colors{text.FgHiBlack}
-	default:
-		return text.Colors{text.FgHiWhite}
-	}
-}
