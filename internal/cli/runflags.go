@@ -86,6 +86,7 @@ func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	cmd.Flags().StringVarP(&f.Alias, "key", "k", "", "explicit job key/alias")
 	cmd.Flags().VarP(depFlag{model.DepAfter, &f.Deps}, "after", "a", "run after job completes (any exit code)")
 	cmd.Flags().VarP(depFlag{model.DepAfterSuccess, &f.Deps}, "after-success", "A", "run only if job succeeds (exit 0)")
+	cmd.MarkFlagsMutuallyExclusive("foreground", "watch")
 }
 
 // watchJob tails logFile to stdout, polling the DB until the job completes.
