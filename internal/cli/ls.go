@@ -13,6 +13,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 
+	"job/internal/config"
 	"job/internal/model"
 )
 
@@ -33,6 +34,11 @@ var lsCmd = &cobra.Command{
 			}
 		}
 
+		limit := lsLimit
+		if !cmd.Flags().Changed("limit") {
+			limit = globalConfig.List.Limit
+		}
+
 		active, err := globalDB.ListActive(lsFilter)
 		if err != nil {
 			return err
@@ -43,10 +49,10 @@ var lsCmd = &cobra.Command{
 			var jobs []*model.Job
 			if !lsAll {
 				// fallback: completed only
-				jobs, err = globalDB.ListCompleted(lsLimit, lsFilter)
+				jobs, err = globalDB.ListCompleted(limit, lsFilter)
 			} else {
 				jobs = append(active, func() []*model.Job {
-					c, _ := globalDB.ListCompleted(lsLimit, lsFilter)
+					c, _ := globalDB.ListCompleted(limit, lsFilter)
 					return c
 				}()...)
 			}
@@ -70,7 +76,7 @@ var lsCmd = &cobra.Command{
 func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
-	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", 20, "max completed jobs to show")
+	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show")
 	rootCmd.AddCommand(lsCmd)
 }
 

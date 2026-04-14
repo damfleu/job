@@ -8,12 +8,14 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/spf13/cobra"
 
+	"job/internal/config"
 	"job/internal/core"
 	"job/internal/db"
 	"job/internal/model"
 )
 
 var globalDB *db.DB
+var globalConfig config.Config
 
 var rootCmd = &cobra.Command{
 	Use:           "job",
@@ -33,6 +35,11 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("opening db: %w", err)
 		}
 		globalDB = d
+		cfg, err := config.Load(filepath.Join(configDir(), "config.toml"))
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
+		globalConfig = cfg
 		return nil
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
@@ -69,6 +76,13 @@ func keyArg(args []string) string {
 		return args[0]
 	}
 	return "."
+}
+
+func configDir() string {
+	if dir := os.Getenv("JOB_CONFIG_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join(xdg.ConfigHome, "job")
 }
 
 func stateDir() string {
