@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -31,10 +32,16 @@ func TestJobRemove(t *testing.T) {
 	h.run("run", "-f", "echo", "bye")
 
 	j := h.lastJob()
+	logFile := j.LogFile
+	require.NotEmpty(t, logFile)
+
 	h.run("remove", j.Key)
 
 	_, err := h.db.Get(j.Key)
 	assert.ErrorIs(t, err, db.ErrNotFound)
+
+	_, err = os.Stat(logFile)
+	assert.True(t, os.IsNotExist(err), "log file should be deleted after remove")
 }
 
 func TestJobAlias(t *testing.T) {

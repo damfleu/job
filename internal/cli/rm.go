@@ -22,7 +22,7 @@ var rmCmd = &cobra.Command{
 		if j.Status != model.StatusCompleted {
 			return fmt.Errorf("job %s is not completed (status: %s)", j.Key, j.Status)
 		}
-		return globalDB.Delete(j.Key)
+		return core.DeleteJob(globalDB, j)
 	},
 }
 
