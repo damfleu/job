@@ -40,21 +40,39 @@ func TestMain(m *testing.M) {
 
 // harness holds per-test state.
 type harness struct {
-	t        *testing.T
-	stateDir string
-	db       *db.DB
+	t         *testing.T
+	stateDir  string
+	configDir string
+	db        *db.DB
 }
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	stateDir := t.TempDir()
+	configDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(stateDir, "db"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	d, err := db.Open(filepath.Join(stateDir, "db", "job.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { d.Close() })
-	return &harness{t: t, stateDir: stateDir, db: d}
+	return &harness{t: t, stateDir: stateDir, configDir: configDir, db: d}
+}
+
+// writeConfig writes content to the harness config file.
+func (h *harness) writeConfig(content string) {
+	h.t.Helper()
+	err := os.WriteFile(filepath.Join(h.configDir, "config.toml"), []byte(content), 0o644)
+	require.NoError(h.t, err)
+}
+
+// writeScript writes an executable shell script and returns its path.
+func (h *harness) writeScript(content string) string {
+	h.t.Helper()
+	path := filepath.Join(h.t.TempDir(), "script.sh")
+	err := os.WriteFile(path, []byte("#!/bin/sh\n"+content), 0o755)
+	require.NoError(h.t, err)
+	return path
 }
 
 // result holds the output of a CLI invocation.
@@ -71,7 +89,7 @@ func (h *harness) run(args ...string) result {
 func (h *harness) runFrom(dir string, args ...string) result {
 	h.t.Helper()
 	cmd := exec.Command(binary, args...)
-	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir)
+	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -101,6 +119,19 @@ func (h *harness) waitFor(key string, status model.Status) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	h.t.Fatalf("job %s did not reach %s within 5s", key, status)
+}
+
+// waitForFile polls until path exists or the test times out.
+func waitForFile(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("file %s did not appear within 5s", path)
 }
 
 // lastJob returns the most recently started job from the DB.

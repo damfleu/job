@@ -33,7 +33,7 @@ func TestRunBackgroundSuccess(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"echo", "bg output"})
 
-	require.NoError(t, RunBackground(store, j.Key))
+	require.NoError(t, RunBackground(store, j.Key, nil))
 
 	got, err := store.Get(j.Key)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestRunBackgroundNonZeroExit(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"false"})
 
-	require.NoError(t, RunBackground(store, j.Key))
+	require.NoError(t, RunBackground(store, j.Key, nil))
 
 	got, err := store.Get(j.Key)
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestRunBackgroundLogFile(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"echo", "hello from bg"})
 
-	require.NoError(t, RunBackground(store, j.Key))
+	require.NoError(t, RunBackground(store, j.Key, nil))
 
 	content, err := os.ReadFile(j.LogFile)
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestRunBackgroundRecordsPGID(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"echo", "pgid test"})
 
-	require.NoError(t, RunBackground(store, j.Key))
+	require.NoError(t, RunBackground(store, j.Key, nil))
 
 	got, err := store.Get(j.Key)
 	require.NoError(t, err)

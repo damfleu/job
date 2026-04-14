@@ -9,7 +9,14 @@ import (
 
 // Config holds all user-configurable settings.
 type Config struct {
-	List ListConfig `toml:"list"`
+	List      ListConfig       `toml:"list"`
+	Notifiers []NotifierConfig `toml:"notifier"`
+}
+
+// NotifierConfig holds settings for a single notifier program.
+type NotifierConfig struct {
+	Program string `toml:"program"`
+	Notify  string `toml:"notify"` // "always" | "explicit"; empty means "explicit"
 }
 
 // ListConfig holds settings for the list command.

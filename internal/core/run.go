@@ -13,14 +13,16 @@ import (
 	"job/internal/db"
 	"job/internal/logfile"
 	"job/internal/model"
+	"job/internal/notify"
 )
 
 // RunOptions configures job creation.
 type RunOptions struct {
-	Alias   string
-	Verbose bool
-	Deps    []model.Dep
-	WorkDir string // if empty, defaults to os.Getwd()
+	Alias     string
+	Verbose   bool
+	Deps      []model.Dep
+	WorkDir   string   // if empty, defaults to os.Getwd()
+	Notifiers []string // programs to call on completion
 }
 
 // CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
@@ -110,6 +112,8 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		return 0, err
 	}
 
+	notify.Fire(opts.Notifiers, j)
+
 	if opts.Verbose {
 		fmt.Fprintf(os.Stderr, "%s done (exit %d)\n", key, exitCode)
 	}
@@ -162,7 +166,11 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 	}
 	lf.Close()
 
-	child := exec.Command(os.Args[0], "__exec", key)
+	args := []string{"__exec", key}
+	for _, p := range opts.Notifiers {
+		args = append(args, "--notifier", p)
+	}
+	child := exec.Command(os.Args[0], args...)
 	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	child.Env = os.Environ()
 	if err := child.Start(); err != nil {

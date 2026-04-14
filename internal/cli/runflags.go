@@ -17,6 +17,7 @@ import (
 type RunFlags struct {
 	Foreground bool
 	Watch      bool
+	Notify     bool
 	Verbose    bool
 	Alias      string
 	Deps       []model.Dep // accumulates -a/-A in declaration order
@@ -43,7 +44,16 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 	if err != nil {
 		return err
 	}
-	opts := core.RunOptions{Alias: f.Alias, Verbose: f.Verbose, Deps: deps, WorkDir: workDir}
+	// Build the list of notifier programs to call when the job completes.
+	// "always" notifiers fire unconditionally; "explicit" (or unset) notifiers
+	// fire only when the user passed -n/--notify.
+	var notifiers []string
+	for _, n := range globalConfig.Notifiers {
+		if n.Notify == "always" || ((n.Notify == "" || n.Notify == "explicit") && f.Notify) {
+			notifiers = append(notifiers, n.Program)
+		}
+	}
+	opts := core.RunOptions{Alias: f.Alias, Verbose: f.Verbose, Deps: deps, WorkDir: workDir, Notifiers: notifiers}
 	if f.Foreground {
 		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
 		if err != nil {
@@ -82,6 +92,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	cmd.Flags().BoolVarP(&f.Foreground, "foreground", "f", false, "run in foreground")
 	cmd.Flags().BoolVarP(&f.Watch, "watch", "w", false, "run in background and tail log")
+	cmd.Flags().BoolVarP(&f.Notify, "notify", "n", false, "notify on completion")
 	cmd.Flags().BoolVarP(&f.Verbose, "verbose", "v", false, "print job key")
 	cmd.Flags().StringVarP(&f.Alias, "key", "k", "", "explicit job key/alias")
 	cmd.Flags().VarP(depFlag{model.DepAfter, &f.Deps}, "after", "a", "run after job completes (any exit code)")

@@ -11,11 +11,12 @@ import (
 
 	"job/internal/db"
 	"job/internal/model"
+	"job/internal/notify"
 )
 
 // RunBackground is called by the __exec child process. It loads the job,
 // runs the command with output going to the log file, and records the result.
-func RunBackground(store db.JobStore, key string) error {
+func RunBackground(store db.JobStore, key string, notifiers []string) error {
 	j, err := store.Get(key)
 	if err != nil {
 		return err
@@ -78,6 +79,7 @@ func RunBackground(store db.JobStore, key string) error {
 
 	_ = lf.Sync()
 	_ = store.Update(j)
+	notify.Fire(notifiers, j)
 	return nil
 }
 
