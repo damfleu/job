@@ -143,7 +143,7 @@ func printTable(jobs []*model.Job) {
 				return headerStyle
 			}
 			if col == 2 {
-				return statusStyle(jobs[row].Status)
+				return jobStatusStyle(jobs[row])
 			}
 			return lipgloss.NewStyle()
 		}).
@@ -153,7 +153,7 @@ func printTable(jobs []*model.Job) {
 		t.Row(
 			j.Key,
 			j.Alias,
-			string(j.Status),
+			jobStatusText(j),
 			displayExitCode(j),
 			displayCmd(j.Command),
 			displayTimestamp(j),
@@ -236,6 +236,7 @@ func age(t time.Time) string {
 	}
 }
 
+// statusStyle is used in the tree view for active jobs.
 func statusStyle(s model.Status) lipgloss.Style {
 	switch s {
 	case model.StatusRunning:
@@ -245,5 +246,37 @@ func statusStyle(s model.Status) lipgloss.Style {
 	default:
 		return lipgloss.NewStyle()
 	}
+}
+
+// jobStatusText returns the display text for the STATUS column.
+// Completed jobs show their reason instead of "completed".
+func jobStatusText(j *model.Job) string {
+	if j.Status == model.StatusCompleted {
+		return string(j.Reason)
+	}
+	return string(j.Status)
+}
+
+// jobStatusStyle returns the color for the STATUS column.
+func jobStatusStyle(j *model.Job) lipgloss.Style {
+	switch j.Status {
+	case model.StatusRunning:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+	case model.StatusBlocked:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
+	case model.StatusCompleted:
+		switch j.Reason {
+		case model.ReasonStopped:
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
+		case model.ReasonDepFailed:
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+		case model.ReasonExited:
+			if j.ExitCode != nil && *j.ExitCode != 0 {
+				return lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+			}
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+		}
+	}
+	return lipgloss.NewStyle()
 }
 
