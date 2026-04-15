@@ -56,6 +56,9 @@ func printJob(j *model.Job) {
 	if j.Context != "" {
 		field("Context", j.Context)
 	}
+	if j.Automated {
+		field("Automated", "yes")
+	}
 	field("Created", formatTime(j.CreatedAt))
 	if j.StartedAt != nil {
 		field("Started", formatTime(*j.StartedAt))

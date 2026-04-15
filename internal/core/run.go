@@ -24,6 +24,7 @@ type RunOptions struct {
 	WorkDir   string   // if empty, defaults to os.Getwd()
 	Notifiers []string // programs to call on completion
 	Context   string   // workspace context string
+	Automated bool     // true when spawned by a script or sequence, not a human
 }
 
 // CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
@@ -54,13 +55,16 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		Context:   opts.Context,
 		CreatedAt: now,
 		Deps:      opts.Deps,
+		Automated: opts.Automated,
 	}
 
 	if err := store.Insert(j); err != nil {
 		return 0, err
 	}
-	if err := store.SetLastKey(key); err != nil {
-		return 0, err
+	if !opts.Automated {
+		if err := store.SetLastKey(key); err != nil {
+			return 0, err
+		}
 	}
 
 	if len(opts.Deps) > 0 {
@@ -163,13 +167,16 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 		Context:   opts.Context,
 		CreatedAt: now,
 		Deps:      opts.Deps,
+		Automated: opts.Automated,
 	}
 
 	if err := store.Insert(j); err != nil {
 		return "", err
 	}
-	if err := store.SetLastKey(key); err != nil {
-		return "", err
+	if !opts.Automated {
+		if err := store.SetLastKey(key); err != nil {
+			return "", err
+		}
 	}
 
 	// pre-create the log file so it exists before __exec opens it

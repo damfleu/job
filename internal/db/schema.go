@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     started_at TEXT,
     stopped_at TEXT,
     deps       TEXT,
-    context    TEXT
+    context    TEXT,
+    automated  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status);
@@ -55,10 +56,14 @@ func migrate(db *sql.DB) error {
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}
-	// Idempotent: add context column to existing databases.
-	_, err := db.Exec(`ALTER TABLE jobs ADD COLUMN context TEXT`)
-	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
-		return err
+	// Idempotent migrations for existing databases.
+	for _, stmt := range []string{
+		`ALTER TABLE jobs ADD COLUMN context TEXT`,
+		`ALTER TABLE jobs ADD COLUMN automated INTEGER NOT NULL DEFAULT 0`,
+	} {
+		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+			return err
+		}
 	}
 	return nil
 }

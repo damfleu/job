@@ -131,3 +131,43 @@ func TestDotResolution(t *testing.T) {
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "echo dot test")
 }
+
+func TestAutomatedJobDoesNotUpdateDot(t *testing.T) {
+	h := newHarness(t)
+
+	// Human job — becomes "."
+	humanKey := runFg(h, "echo", "human job")
+
+	// Automated job — capture key from stderr, should not steal "."
+	r := h.run("run", "-v", "-f", "--automated", "echo", "automated job")
+	automatedKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
+	require.NotEmpty(t, automatedKey)
+
+	// Verify the automated flag is stored.
+	j, err := h.db.Get(automatedKey)
+	require.NoError(t, err)
+	assert.True(t, j.Automated)
+
+	// "." should still resolve to the human job.
+	r = h.run("show", ".")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, humanKey)
+}
+
+func TestSequenceRunDoesNotUpdateDot(t *testing.T) {
+	h := newHarness(t)
+
+	// Human job — this becomes the last human "."
+	lastHumanKey := runFg(h, "echo", "last human job")
+
+	// Create and run a sequence from a separate job.
+	seqKey := runFg(h, "echo", "seq step")
+	h.run("sequence", "save", "dot-seq", seqKey)
+	h.run("sequence", "run", "dot-seq")
+
+	// "." should still resolve to seqKey, not the automated sequence job.
+	r := h.run("show", ".")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, seqKey)
+	assert.NotContains(t, r.stdout, lastHumanKey)
+}

@@ -83,8 +83,9 @@ func RunSequence(store db.JobStore, stateDir, name string) ([]string, error) {
 		}
 
 		key, err := CreateAndSpawn(store, stateDir, orig.Command, RunOptions{
-			WorkDir: orig.WorkDir,
-			Deps:    newDeps,
+			WorkDir:   orig.WorkDir,
+			Deps:      newDeps,
+			Automated: true,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("sequence %s: spawning step %d: %w", name, i, err)

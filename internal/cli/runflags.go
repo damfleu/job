@@ -21,6 +21,7 @@ type RunFlags struct {
 	Verbose    bool
 	Alias      string
 	Deps       []model.Dep // accumulates -a/-A in declaration order
+	Automated  bool
 }
 
 // depFlag is a pflag.Value that appends a dep of a fixed kind to a Deps slice.
@@ -64,6 +65,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 		WorkDir:   workDir,
 		Notifiers: notifiers,
 		Context:   core.ResolveContext(resolvedWorkDir, globalConfig.Context.Resolvers),
+		Automated: f.Automated,
 	}
 	if f.Foreground {
 		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
@@ -108,6 +110,7 @@ func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	cmd.Flags().StringVarP(&f.Alias, "key", "k", "", "explicit job key/alias")
 	cmd.Flags().VarP(depFlag{model.DepAfter, &f.Deps}, "after", "a", "run after job completes (any exit code)")
 	cmd.Flags().VarP(depFlag{model.DepAfterSuccess, &f.Deps}, "after-success", "A", "run only if job succeeds (exit 0)")
+	cmd.Flags().BoolVar(&f.Automated, "automated", false, "mark job as automated (not human-initiated); skips '.' tracking")
 	cmd.MarkFlagsMutuallyExclusive("foreground", "watch")
 }
 

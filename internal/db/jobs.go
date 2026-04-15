@@ -12,7 +12,7 @@ import (
 
 // jobCols is the canonical column order used in all SELECT queries.
 const jobCols = `key, alias, command, work_dir, log_file, status, reason,
-    exit_code, pid, pgid, hostname, username, created_at, started_at, stopped_at, deps, context`
+    exit_code, pid, pgid, hostname, username, created_at, started_at, stopped_at, deps, context, automated`
 
 func (d *DB) Insert(job *model.Job) error {
 	cmd, err := json.Marshal(job.Command)
@@ -27,8 +27,8 @@ func (d *DB) Insert(job *model.Job) error {
 	_, err = d.db.Exec(`
 		INSERT INTO jobs
 		  (key, alias, command, work_dir, log_file, status, reason, exit_code,
-		   pid, pgid, hostname, username, created_at, started_at, stopped_at, deps, context)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		   pid, pgid, hostname, username, created_at, started_at, stopped_at, deps, context, automated)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		job.Key,
 		nullStr(job.Alias),
 		string(cmd),
@@ -46,6 +46,7 @@ func (d *DB) Insert(job *model.Job) error {
 		nullTime(job.StoppedAt),
 		deps,
 		nullStr(job.Context),
+		job.Automated,
 	)
 	if err != nil {
 		return fmt.Errorf("db: insert %s: %w", job.Key, err)
@@ -82,7 +83,7 @@ func (d *DB) Update(job *model.Job) error {
 		  pid=?, pgid=?,
 		  hostname=?, username=?,
 		  started_at=?, stopped_at=?,
-		  deps=?, context=?
+		  deps=?, context=?, automated=?
 		WHERE key=?`,
 		nullStr(job.Alias),
 		string(cmd),
@@ -99,6 +100,7 @@ func (d *DB) Update(job *model.Job) error {
 		nullTime(job.StoppedAt),
 		deps,
 		nullStr(job.Context),
+		job.Automated,
 		job.Key,
 	)
 	if err != nil {
@@ -169,13 +171,14 @@ func scanJob(s interface{ Scan(...any) error }) (*model.Job, error) {
 		cmdJSON   string
 		depsJSON  sql.NullString
 		context   sql.NullString
+		automated int
 	)
 
 	err := s.Scan(
 		&j.Key, &alias, &cmdJSON, &j.WorkDir, &j.LogFile,
 		&status, &reason, &exitCode,
 		&j.PID, &j.PGID, &hostname, &username,
-		&createdAt, &startedAt, &stoppedAt, &depsJSON, &context,
+		&createdAt, &startedAt, &stoppedAt, &depsJSON, &context, &automated,
 	)
 	if err != nil {
 		return nil, err
@@ -187,6 +190,7 @@ func scanJob(s interface{ Scan(...any) error }) (*model.Job, error) {
 	j.Hostname = hostname.String
 	j.Username = username.String
 	j.Context = context.String
+	j.Automated = automated != 0
 
 	if exitCode.Valid {
 		n := int(exitCode.Int64)

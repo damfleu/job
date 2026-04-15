@@ -36,9 +36,10 @@ type Job struct {
 	PID  int // 0 when not running
 	PGID int // process group ID
 
-	Hostname string
-	Username string
-	Context  string
+	Hostname  string
+	Username  string
+	Context   string
+	Automated bool // true when spawned by a script or sequence, not a human
 
 	CreatedAt time.Time
 	StartedAt *time.Time
