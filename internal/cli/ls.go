@@ -93,8 +93,7 @@ func init() {
 	rootCmd.AddCommand(lsCmd)
 }
 
-// renderTree builds a lipgloss tree from a set of active jobs and returns
-// the rendered string.
+// renderTree builds a lipgloss tree from a set of active jobs and returns the rendered string.
 func renderTree(jobs []*model.Job) string {
 	byKey := make(map[string]*model.Job, len(jobs))
 	for _, j := range jobs {
@@ -178,11 +177,11 @@ func printTable(jobs []*model.Job) {
 	// Measure natural widths of all non-COMMAND columns to give COMMAND the rest.
 	keyW, statusW, rcW, timeW, durW := len("KEY"), len("STATUS"), len("RC"), len("TIME"), len("DURATION")
 	for _, j := range jobs {
-		keyW    = max(keyW, len(displayKeyAlias(j)))
+		keyW = max(keyW, len(displayKeyAlias(j)))
 		statusW = max(statusW, len(jobStatusText(j)))
-		rcW     = max(rcW, min(len(displayExitCode(j)), 3))
-		timeW   = max(timeW, len(displayTimestamp(j)))
-		durW    = max(durW, len(displayDuration(j)))
+		rcW = max(rcW, min(len(displayExitCode(j)), 3))
+		timeW = max(timeW, len(displayTimestamp(j)))
+		durW = max(durW, len(displayDuration(j)))
 	}
 	// 6 cols × 2 padding + 7 border chars (left + 5 separators + right) = 19 overhead.
 	cmdMax := termWidth - (keyW + statusW + rcW + timeW + durW + 19)
@@ -233,15 +232,10 @@ func displayKeyAlias(j *model.Job) string {
 }
 
 func displayCmd(cmd []string) string {
-	return truncate(strings.Join(cmd, " "), 60)
+	return ellipsisTrunc(strings.Join(cmd, " "), 60)
 }
 
-func truncate(s string, max int) string {
-	if len(s) > max {
-		return s[:max-3] + "..."
-	}
-	return s
-}
+
 
 func displayExitCode(j *model.Job) string {
 	if j.ExitCode == nil {
@@ -339,4 +333,3 @@ func jobStatusStyle(j *model.Job) lipgloss.Style {
 	}
 	return lipgloss.NewStyle()
 }
-
