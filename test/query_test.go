@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,6 +83,36 @@ func TestJobListInvalidFilter(t *testing.T) {
 	h := newHarness(t)
 	r := h.run("list", "-f", "a(b")
 	assert.NotEqual(t, 0, r.exitCode)
+}
+
+func TestListHere(t *testing.T) {
+	h := newHarness(t)
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+
+	// resolver that outputs the working directory — disambiguates the two dirs
+	script := h.writeScript("pwd")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+
+	h.runFrom(dirA, "run", "-f", "echo", "from-a")
+	h.runFrom(dirB, "run", "-f", "echo", "from-b")
+
+	r := h.runFrom(dirA, "list", "--here")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "echo from-a")
+	assert.NotContains(t, r.stdout, "echo from-b")
+}
+
+func TestJobShowContext(t *testing.T) {
+	h := newHarness(t)
+	script := h.writeScript("echo mycontext")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+
+	h.run("run", "-f", "echo", "ctx test")
+
+	r := h.run("show")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "mycontext")
 }
 
 func TestJobListRegex(t *testing.T) {
