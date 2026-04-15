@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 
@@ -133,11 +134,15 @@ func init() {
 func printSeqTable(seqs []*model.Sequence) {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.SetStyle(jobTableStyle())
 	t.AppendHeader(table.Row{"NAME", "STEPS", "CREATED"})
 	for _, seq := range seqs {
 		t.AppendRow(table.Row{seq.Name, fmt.Sprintf("%d", len(seq.Steps)), formatTime(seq.CreatedAt)})
 	}
+	if !term.IsTerminal(os.Stdout.Fd()) {
+		t.RenderTSV()
+		return
+	}
+	t.SetStyle(jobTableStyle())
 	t.Render()
 }
 
@@ -158,7 +163,6 @@ func printSeqSteps(seq *model.Sequence) {
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.SetStyle(jobTableStyle())
 	t.AppendHeader(table.Row{"#", "KEY", "COMMAND", "DEPS"})
 	for i, j := range jobs {
 		t.AppendRow(table.Row{
@@ -169,6 +173,11 @@ func printSeqSteps(seq *model.Sequence) {
 		})
 	}
 	fmt.Fprintf(os.Stdout, "%s\n\n", seq.Name)
+	if !term.IsTerminal(os.Stdout.Fd()) {
+		t.RenderTSV()
+		return
+	}
+	t.SetStyle(jobTableStyle())
 	t.Render()
 }
 

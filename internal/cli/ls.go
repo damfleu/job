@@ -145,45 +145,53 @@ func nodeLabel(j *model.Job) string {
 }
 
 func printTable(jobs []*model.Job) {
-	termWidth, _, _ := term.GetSize(os.Stdout.Fd())
+	isTTY := term.IsTerminal(os.Stdout.Fd())
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.SetStyle(jobTableStyle())
-
-	configs := []table.ColumnConfig{
-		{Name: "RC", WidthMax: 3, WidthMin: 1},
-	}
-	if termWidth > 0 {
-		// Measure natural widths of all non-COMMAND columns.
-		keyW, statusW, rcW, timeW, durW := len("KEY"), len("STATUS"), len("RC"), len("TIME"), len("DURATION")
-		for _, j := range jobs {
-			keyW    = max(keyW, len(displayKeyAlias(j)))
-			statusW = max(statusW, len(jobStatusText(j)))
-			rcW     = max(rcW, min(len(displayExitCode(j)), 3))
-			timeW   = max(timeW, len(displayTimestamp(j)))
-			durW    = max(durW, len(displayDuration(j)))
-		}
-		// 6 cols × 2 padding + 7 border chars (left + 5 separators + right) = 19 overhead.
-		cmdMax := termWidth - (keyW + statusW + rcW + timeW + durW + 19)
-		if cmdMax >= len("COMMAND") {
-			configs = append(configs, table.ColumnConfig{
-				Name: "COMMAND", WidthMax: cmdMax, WidthMaxEnforcer: ellipsisTrunc,
-			})
-		}
-	}
-	t.SetColumnConfigs(configs)
 	t.AppendHeader(table.Row{"KEY", "STATUS", "RC", "COMMAND", "TIME", "DURATION"})
 	for _, j := range jobs {
+		status := jobStatusText(j)
+		if isTTY {
+			status = jobStatusStyle(j).Render(status)
+		}
 		t.AppendRow(table.Row{
 			displayKeyAlias(j),
-			jobStatusStyle(j).Render(jobStatusText(j)),
+			status,
 			displayExitCode(j),
 			strings.Join(j.Command, " "),
 			displayTimestamp(j),
 			displayDuration(j),
 		})
 	}
+
+	if !isTTY {
+		t.RenderTSV()
+		return
+	}
+
+	termWidth, _, _ := term.GetSize(os.Stdout.Fd())
+	t.SetStyle(jobTableStyle())
+	configs := []table.ColumnConfig{
+		{Name: "RC", WidthMax: 3, WidthMin: 1},
+	}
+	// Measure natural widths of all non-COMMAND columns to give COMMAND the rest.
+	keyW, statusW, rcW, timeW, durW := len("KEY"), len("STATUS"), len("RC"), len("TIME"), len("DURATION")
+	for _, j := range jobs {
+		keyW    = max(keyW, len(displayKeyAlias(j)))
+		statusW = max(statusW, len(jobStatusText(j)))
+		rcW     = max(rcW, min(len(displayExitCode(j)), 3))
+		timeW   = max(timeW, len(displayTimestamp(j)))
+		durW    = max(durW, len(displayDuration(j)))
+	}
+	// 6 cols × 2 padding + 7 border chars (left + 5 separators + right) = 19 overhead.
+	cmdMax := termWidth - (keyW + statusW + rcW + timeW + durW + 19)
+	if cmdMax >= len("COMMAND") {
+		configs = append(configs, table.ColumnConfig{
+			Name: "COMMAND", WidthMax: cmdMax, WidthMaxEnforcer: ellipsisTrunc,
+		})
+	}
+	t.SetColumnConfigs(configs)
 	t.Render()
 }
 
