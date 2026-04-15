@@ -139,10 +139,16 @@ func printTable(jobs []*model.Job) {
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
 		StyleFunc(func(row, col int) lipgloss.Style {
+			if col == 2 { // RC — fixed narrow width, skip during expansion
+				if row == table.HeaderRow {
+					return headerStyle.Width(3)
+				}
+				return lipgloss.NewStyle().Width(3)
+			}
 			if row == table.HeaderRow {
 				return headerStyle
 			}
-			if col == 1 {
+			if col == 1 { // STATUS
 				return jobStatusStyle(jobs[row])
 			}
 			return lipgloss.NewStyle()
