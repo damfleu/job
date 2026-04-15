@@ -104,6 +104,25 @@ func TestPruneRequiresFlag(t *testing.T) {
 	assert.NotEqual(t, 0, r.exitCode)
 }
 
+func TestStopBlockedJobShowsRunningDep(t *testing.T) {
+	h := newHarness(t)
+
+	r1 := h.run("run", "-v", "sleep", "60")
+	depKey := strings.TrimSpace(r1.stderr)
+	require.NotEmpty(t, depKey)
+	h.waitFor(depKey, model.StatusRunning)
+
+	r2 := h.run("run", "-v", "-A", depKey, "echo", "queued")
+	blockedKey := strings.TrimSpace(r2.stderr)
+	require.NotEmpty(t, blockedKey)
+	h.waitFor(blockedKey, model.StatusBlocked)
+
+	r := h.run("stop", ".")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "stopped "+blockedKey)
+	assert.Contains(t, r.stdout, depKey+" is still running")
+}
+
 func TestDotResolution(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "echo", "dot test")
