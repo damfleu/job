@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/charmbracelet/x/term"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 
 	"job/internal/config"
@@ -146,43 +147,70 @@ func nodeLabel(j *model.Job) string {
 func printTable(jobs []*model.Job) {
 	termWidth, _, _ := term.GetSize(os.Stdout.Fd())
 
-	headerStyle := lipgloss.NewStyle().Bold(true)
-	t := table.New().
-		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if col == 2 { // RC — fixed narrow width, skip during expansion
-				if row == table.HeaderRow {
-					return headerStyle.Width(3)
-				}
-				return lipgloss.NewStyle().Width(3)
-			}
-			if row == table.HeaderRow {
-				return headerStyle
-			}
-			if col == 1 { // STATUS
-				return jobStatusStyle(jobs[row])
-			}
-			return lipgloss.NewStyle()
-		}).
-		Headers("KEY", "STATUS", "RC", "COMMAND", "TIME", "DURATION")
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetStyle(jobTableStyle())
 
+	configs := []table.ColumnConfig{
+		{Name: "RC", WidthMax: 3, WidthMin: 1},
+	}
+	if termWidth > 0 {
+		// Measure natural widths of all non-COMMAND columns.
+		keyW, statusW, rcW, timeW, durW := len("KEY"), len("STATUS"), len("RC"), len("TIME"), len("DURATION")
+		for _, j := range jobs {
+			keyW    = max(keyW, len(displayKeyAlias(j)))
+			statusW = max(statusW, len(jobStatusText(j)))
+			rcW     = max(rcW, min(len(displayExitCode(j)), 3))
+			timeW   = max(timeW, len(displayTimestamp(j)))
+			durW    = max(durW, len(displayDuration(j)))
+		}
+		// 6 cols × 2 padding + 7 border chars (left + 5 separators + right) = 19 overhead.
+		cmdMax := termWidth - (keyW + statusW + rcW + timeW + durW + 19)
+		if cmdMax >= len("COMMAND") {
+			configs = append(configs, table.ColumnConfig{
+				Name: "COMMAND", WidthMax: cmdMax, WidthMaxEnforcer: ellipsisTrunc,
+			})
+		}
+	}
+	t.SetColumnConfigs(configs)
+	t.AppendHeader(table.Row{"KEY", "STATUS", "RC", "COMMAND", "TIME", "DURATION"})
 	for _, j := range jobs {
-		t.Row(
+		t.AppendRow(table.Row{
 			displayKeyAlias(j),
-			jobStatusText(j),
+			jobStatusStyle(j).Render(jobStatusText(j)),
 			displayExitCode(j),
-			displayCmd(j.Command),
+			strings.Join(j.Command, " "),
 			displayTimestamp(j),
 			displayDuration(j),
-		)
+		})
 	}
+	t.Render()
+}
 
-	if termWidth > 0 {
-		t.Width(termWidth)
+// ellipsisTrunc truncates s to maxLen characters, appending "..." when cut.
+func ellipsisTrunc(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
 	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
+}
 
-	fmt.Fprintln(os.Stdout, t)
+func jobTableStyle() table.Style {
+	return table.Style{
+		Name: "job",
+		Box:  table.StyleBoxLight,
+		Color: table.ColorOptions{
+			Border: text.Colors{text.FgHiBlack},
+			Header: text.Colors{text.Bold},
+		},
+		Format: table.FormatOptions{
+			Header: text.FormatDefault,
+		},
+		Options: table.OptionsDefault,
+	}
 }
 
 func displayKey(j *model.Job) string {

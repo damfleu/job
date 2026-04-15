@@ -6,9 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
-	"github.com/charmbracelet/x/term"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 
 	"job/internal/core"
@@ -133,28 +131,14 @@ func init() {
 }
 
 func printSeqTable(seqs []*model.Sequence) {
-	termWidth, _, _ := term.GetSize(os.Stdout.Fd())
-	headerStyle := lipgloss.NewStyle().Bold(true)
-
-	t := table.New().
-		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerStyle
-			}
-			return lipgloss.NewStyle()
-		}).
-		Headers("NAME", "STEPS", "CREATED")
-
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetStyle(jobTableStyle())
+	t.AppendHeader(table.Row{"NAME", "STEPS", "CREATED"})
 	for _, seq := range seqs {
-		t.Row(seq.Name, fmt.Sprintf("%d", len(seq.Steps)), formatTime(seq.CreatedAt))
+		t.AppendRow(table.Row{seq.Name, fmt.Sprintf("%d", len(seq.Steps)), formatTime(seq.CreatedAt)})
 	}
-
-	if termWidth > 0 {
-		t.Width(termWidth)
-	}
-	fmt.Fprintln(os.Stdout, t)
+	t.Render()
 }
 
 func printSeqSteps(seq *model.Sequence) {
@@ -172,34 +156,20 @@ func printSeqSteps(seq *model.Sequence) {
 		}
 	}
 
-	termWidth, _, _ := term.GetSize(os.Stdout.Fd())
-	headerStyle := lipgloss.NewStyle().Bold(true)
-
-	t := table.New().
-		Border(lipgloss.NormalBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerStyle
-			}
-			return lipgloss.NewStyle()
-		}).
-		Headers("#", "KEY", "COMMAND", "DEPS")
-
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+	t.SetStyle(jobTableStyle())
+	t.AppendHeader(table.Row{"#", "KEY", "COMMAND", "DEPS"})
 	for i, j := range jobs {
-		t.Row(
+		t.AppendRow(table.Row{
 			fmt.Sprintf("%d", i),
 			j.Key,
-			displayCmd(j.Command),
+			strings.Join(j.Command, " "),
 			formatStepDeps(j.Deps, keyToStep),
-		)
-	}
-
-	if termWidth > 0 {
-		t.Width(termWidth)
+		})
 	}
 	fmt.Fprintf(os.Stdout, "%s\n\n", seq.Name)
-	fmt.Fprintln(os.Stdout, t)
+	t.Render()
 }
 
 // formatStepDeps renders a job's deps as "after-success 1, after 0" using step
