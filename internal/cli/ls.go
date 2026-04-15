@@ -142,17 +142,16 @@ func printTable(jobs []*model.Job) {
 			if row == table.HeaderRow {
 				return headerStyle
 			}
-			if col == 2 {
+			if col == 1 {
 				return jobStatusStyle(jobs[row])
 			}
 			return lipgloss.NewStyle()
 		}).
-		Headers("KEY", "ALIAS", "STATUS", "RC", "COMMAND", "TIME", "DURATION")
+		Headers("KEY", "STATUS", "RC", "COMMAND", "TIME", "DURATION")
 
 	for _, j := range jobs {
 		t.Row(
-			j.Key,
-			j.Alias,
+			displayKeyAlias(j),
 			jobStatusText(j),
 			displayExitCode(j),
 			displayCmd(j.Command),
@@ -169,6 +168,13 @@ func printTable(jobs []*model.Job) {
 }
 
 func displayKey(j *model.Job) string {
+	return j.Key
+}
+
+func displayKeyAlias(j *model.Job) string {
+	if j.Alias != "" {
+		return j.Alias
+	}
 	return j.Key
 }
 
