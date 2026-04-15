@@ -17,7 +17,6 @@ func completedJobWithLog(t *testing.T, store *db.DB, logFile string) *model.Job 
 	t.Helper()
 	key := model.GenerateKey("echo")
 	now := time.Now().UTC()
-	rc := 0
 	j := &model.Job{
 		Key:       key,
 		Command:   []string{"echo", "hi"},
@@ -25,7 +24,7 @@ func completedJobWithLog(t *testing.T, store *db.DB, logFile string) *model.Job 
 		LogFile:   logFile,
 		Status:    model.StatusCompleted,
 		Reason:    model.ReasonExited,
-		ExitCode:  &rc,
+		ExitCode:  new(0),
 		CreatedAt: now,
 		StartedAt: &now,
 		StoppedAt: &now,

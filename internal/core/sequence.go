@@ -9,8 +9,8 @@ import (
 	"job/internal/model"
 )
 
-// SaveSequence walks the transitive dependency graph of job j, topologically
-// sorts the result (deps before dependents), and stores it as a named sequence.
+// SaveSequence walks the transitive dependency graph of job j, topologically sorts the result (deps
+// before dependents), and stores it as a named sequence.
 func SaveSequence(store db.JobStore, name string, j *model.Job) error {
 	visited := map[string]*model.Job{}
 	queue := []*model.Job{j}
@@ -45,9 +45,9 @@ func SaveSequence(store db.JobStore, name string, j *model.Job) error {
 	})
 }
 
-// RunSequence replays a named sequence by spawning each step as a new
-// background job, remapping dependency keys from the originals to the newly
-// created jobs. It returns the new job keys in step order.
+// RunSequence replays a named sequence by spawning each step as a new background job, remapping
+// dependency keys from the originals to the newly created jobs. It returns the new job keys in step
+// order.
 func RunSequence(store db.JobStore, stateDir, name string) ([]string, error) {
 	seq, err := store.GetSequence(name)
 	if err != nil {
@@ -69,8 +69,8 @@ func RunSequence(store db.JobStore, stateDir, name string) ([]string, error) {
 		keyToStep[key] = i
 	}
 
-	// Spawn each step in topological order, substituting old dep keys with
-	// the keys of the newly spawned jobs.
+	// Spawn each step in topological order, substituting old dep keys with the keys of the newly
+	// spawned jobs.
 	newKeys := make([]string, len(seq.Steps))
 	for i, orig := range origJobs {
 		newDeps := make([]model.Dep, len(orig.Deps))
@@ -95,8 +95,8 @@ func RunSequence(store db.JobStore, stateDir, name string) ([]string, error) {
 	return newKeys, nil
 }
 
-// topoSort performs Kahn's algorithm on a map of jobs, returning keys ordered
-// so that every dependency appears before the jobs that depend on it.
+// topoSort performs Kahn's algorithm on a map of jobs, returning keys ordered so that every
+// dependency appears before the jobs that depend on it.
 func topoSort(jobs map[string]*model.Job) ([]string, error) {
 	inDegree := make(map[string]int, len(jobs))
 	dependents := make(map[string][]string, len(jobs))

@@ -56,12 +56,11 @@ func TestInsertGetOptionalFields(t *testing.T) {
 	db := openMemDB(t)
 
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	code := 42
 	job := makeJob("key2")
 	job.Alias = "myalias"
 	job.Status = model.StatusCompleted
 	job.Reason = model.ReasonExited
-	job.ExitCode = &code
+	job.ExitCode = new(42)
 	job.PID = 1234
 	job.PGID = 1234
 	job.StartedAt = &now
@@ -94,10 +93,9 @@ func TestUpdate(t *testing.T) {
 	require.NoError(t, db.Insert(job))
 
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	code := 0
 	job.Status = model.StatusCompleted
 	job.Reason = model.ReasonExited
-	job.ExitCode = &code
+	job.ExitCode = new(0)
 	job.StartedAt = &now
 	job.StoppedAt = &now
 
@@ -166,8 +164,7 @@ func TestListCompleted(t *testing.T) {
 		j := makeJob(key)
 		j.Status = model.StatusCompleted
 		offset := time.Duration(i) * time.Second
-		t2 := now.Add(offset).Truncate(time.Millisecond)
-		j.StoppedAt = &t2
+		j.StoppedAt = new(now.Add(offset).Truncate(time.Millisecond))
 		require.NoError(t, db.Insert(j))
 	}
 	require.NoError(t, db.Insert(makeJob("active1"))) // not completed
@@ -214,8 +211,7 @@ func TestListCompletedFilter(t *testing.T) {
 	for i, cmd := range [][]string{{"make", "-j8"}, {"go", "test"}, {"make", "install"}} {
 		j := makeJob(fmt.Sprintf("k%d", i+1))
 		j.Status = model.StatusCompleted
-		t2 := now.Add(time.Duration(i) * time.Second).Truncate(time.Millisecond)
-		j.StoppedAt = &t2
+		j.StoppedAt = new(now.Add(time.Duration(i) * time.Second).Truncate(time.Millisecond))
 		j.Command = cmd
 		require.NoError(t, db.Insert(j))
 	}
@@ -319,8 +315,7 @@ func TestListCompletedBefore(t *testing.T) {
 	for i, key := range []string{"old1", "old2", "new1"} {
 		j := makeJob(key)
 		j.Status = model.StatusCompleted
-		t2 := now.Add(time.Duration(i) * time.Hour).Truncate(time.Millisecond)
-		j.StoppedAt = &t2
+		j.StoppedAt = new(now.Add(time.Duration(i) * time.Hour).Truncate(time.Millisecond))
 		require.NoError(t, db.Insert(j))
 	}
 	require.NoError(t, db.Insert(makeJob("active1"))) // not completed, must be excluded

@@ -14,8 +14,8 @@ import (
 	"job/internal/notify"
 )
 
-// RunBackground is called by the __exec child process. It loads the job,
-// runs the command with output going to the log file, and records the result.
+// RunBackground is called by the __exec child process. It loads the job, runs the command with
+// output going to the log file, and records the result.
 func RunBackground(store db.JobStore, key string, notifiers []string) error {
 	j, err := store.Get(key)
 	if err != nil {
@@ -24,7 +24,7 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 
 	if len(j.Deps) > 0 {
 		j.Status = model.StatusBlocked
-		_ = store.Update(j)
+		_ = store.Update(j) // best-effort: job will wait for deps regardless
 
 		if err := WaitForDeps(store, j); err != nil {
 			if errors.Is(err, ErrDepFailed) {
@@ -62,52 +62,47 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 		return markFailed(store, j, err)
 	}
 
-	startedAt := time.Now().UTC()
 	j.Status = model.StatusRunning
 	j.PID = cmd.Process.Pid
 	j.PGID = cmd.Process.Pid // pgid == pid when Setpgid=true
-	j.StartedAt = &startedAt
-	_ = store.Update(j)
+	j.StartedAt = new(time.Now().UTC())
+	_ = store.Update(j) // best-effort: process is running regardless
 
 	waitErr := cmd.Wait()
 
-	stoppedAt := time.Now().UTC()
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonExited
 	j.PID = 0
-	j.StoppedAt = &stoppedAt
+	j.StoppedAt = new(time.Now().UTC())
 
 	exitCode := 0
 	if waitErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(waitErr, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](waitErr); ok {
 			exitCode = exitErr.ExitCode()
 		}
 	}
 	j.ExitCode = &exitCode
 
 	_ = lf.Sync()
+	// Best-effort: the job completed regardless of whether we can persist the state.
 	_ = store.Update(j)
 	notify.Fire(notifiers, j)
 	return nil
 }
 
 func markDepFailed(store db.JobStore, j *model.Job) error {
-	stoppedAt := time.Now().UTC()
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonDepFailed
-	j.StoppedAt = &stoppedAt
-	_ = store.Update(j)
+	j.StoppedAt = new(time.Now().UTC())
+	_ = store.Update(j) // best-effort: dep-failed state is informational
 	return nil
 }
 
 func markFailed(store db.JobStore, j *model.Job, startErr error) error {
-	stoppedAt := time.Now().UTC()
-	code := 1
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonExited
-	j.ExitCode = &code
-	j.StoppedAt = &stoppedAt
-	_ = store.Update(j)
+	j.ExitCode = new(1)
+	j.StoppedAt = new(time.Now().UTC())
+	_ = store.Update(j) // best-effort: returning the start error is more informative
 	return fmt.Errorf("starting command: %w", startErr)
 }

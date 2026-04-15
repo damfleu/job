@@ -74,10 +74,9 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		}
 		if err := WaitForDeps(store, j); err != nil {
 			if errors.Is(err, ErrDepFailed) {
-				stoppedAt := time.Now().UTC()
 				j.Status = model.StatusCompleted
 				j.Reason = model.ReasonDepFailed
-				j.StoppedAt = &stoppedAt
+				j.StoppedAt = new(time.Now().UTC())
 				_ = store.Update(j)
 				return 0, fmt.Errorf("dependency failed")
 			}
@@ -101,10 +100,9 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 	}
 	defer lf.Close()
 
-	startedAt := time.Now().UTC()
 	j.Status = model.StatusRunning
 	j.PID = os.Getpid()
-	j.StartedAt = &startedAt
+	j.StartedAt = new(time.Now().UTC())
 	if err := store.Update(j); err != nil {
 		return 0, err
 	}
@@ -115,11 +113,10 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 
 	exitCode, runErr := runForeground(command, workDir, lf)
 
-	stoppedAt := time.Now().UTC()
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonExited
 	j.ExitCode = &exitCode
-	j.StoppedAt = &stoppedAt
+	j.StoppedAt = new(time.Now().UTC())
 	j.PID = 0
 
 	_ = lf.Sync()
@@ -208,8 +205,7 @@ func runForeground(command []string, workDir string, lf *os.File) (int, error) {
 	cmd.Stderr = io.MultiWriter(os.Stderr, lf)
 
 	if err := cmd.Run(); err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return exitErr.ExitCode(), err
 		}
 		return 1, err

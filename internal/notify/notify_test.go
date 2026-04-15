@@ -23,15 +23,13 @@ func TestFire(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "payload.json")
 		script := writeScript(t, "#!/bin/sh\ncat > "+out+"\n")
 
-		rc := 0
 		start := time.Now()
-		stop := start.Add(90 * time.Second)
 		j := &model.Job{
 			Key:       "123_abc_make",
 			Command:   []string{"make", "-j8"},
-			ExitCode:  &rc,
+			ExitCode:  new(0),
 			StartedAt: &start,
-			StoppedAt: &stop,
+			StoppedAt: new(start.Add(90 * time.Second)),
 		}
 		notify.Fire([]string{script}, j)
 

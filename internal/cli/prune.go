@@ -26,6 +26,7 @@ func init() {
 	pruneCmd.Flags().StringVar(&pruneOlderThan, "older-than", "", "delete jobs older than duration (e.g. 30d, 2w, 24h)")
 	pruneCmd.Flags().StringVar(&pruneBefore, "before", "", "delete jobs that completed before this job")
 	pruneCmd.MarkFlagsMutuallyExclusive("older-than", "before")
+	pruneCmd.MarkFlagsOneRequired("older-than", "before")
 	rootCmd.AddCommand(pruneCmd)
 }
 
@@ -47,8 +48,6 @@ func runPrune(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("job %s has no stop time", j.Key)
 		}
 		cutoff = *j.StoppedAt
-	default:
-		return fmt.Errorf("one of --older-than or --before is required")
 	}
 
 	jobs, err := globalDB.ListCompletedBefore(cutoff)
@@ -57,6 +56,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	}
 	pruned, skipped := 0, 0
 	for _, j := range jobs {
+		// Prevent deleting jobs that are referenced by sequences so that sequences remain runnable.
 		seqs, err := globalDB.SequencesForJob(j.Key)
 		if err != nil {
 			return fmt.Errorf("checking refs for %s: %w", j.Key, err)

@@ -9,8 +9,8 @@ import (
 	"job/internal/model"
 )
 
-// StopJob sends SIGTERM to the job's process group, waits up to 5 seconds,
-// then escalates to SIGKILL. Updates the DB regardless of signal outcome.
+// StopJob sends SIGTERM to the job's process group, waits up to 5 seconds, then escalates to
+// SIGKILL. Updates the DB regardless of signal outcome.
 func StopJob(store db.JobStore, key string) error {
 	j, err := store.Get(key)
 	if err != nil {
@@ -28,17 +28,16 @@ func StopJob(store db.JobStore, key string) error {
 		// no process yet, just mark it stopped
 	}
 
-	now := time.Now().UTC()
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonStopped
-	j.StoppedAt = &now
+	j.StoppedAt = new(time.Now().UTC())
 	j.PID = 0
 
 	return store.Update(j)
 }
 
-// killProcessGroup sends SIGTERM to the process group and waits up to 5s
-// before escalating to SIGKILL.
+// killProcessGroup sends SIGTERM to the process group and waits up to 5s before escalating to
+// SIGKILL.
 func killProcessGroup(pgid int) {
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
 

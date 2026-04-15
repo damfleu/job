@@ -12,8 +12,8 @@ import (
 	"job/internal/model"
 )
 
-// RunFlags holds the flags shared between the root run command and subcommands
-// like retry that also launch jobs (foreground, watch, alias, deps).
+// RunFlags holds the flags shared between the root run command and subcommands like retry that also
+// launch jobs (foreground, watch, alias, deps).
 type RunFlags struct {
 	Foreground bool
 	Watch      bool
@@ -37,17 +37,15 @@ func (d depFlag) Set(val string) error {
 	return nil
 }
 
-// launchJob creates and starts a job using command and workDir (empty = cwd),
-// honouring the foreground/background choice in f. It is shared by the root
-// run path and retry.
+// launchJob creates and starts a job using command and workDir (empty = cwd), honouring the
+// foreground/background choice in f. It is shared by the root run path and retry.
 func launchJob(command []string, workDir string, f RunFlags) error {
 	deps, err := resolveDeps(f.Deps)
 	if err != nil {
 		return err
 	}
-	// Build the list of notifier programs to call when the job completes.
-	// "always" notifiers fire unconditionally; "explicit" (or unset) notifiers
-	// fire only when the user passed -n/--notify.
+	// Build the list of notifier programs to call when the job completes. "always" notifiers fire
+	// unconditionally; "explicit" (or unset) notifiers fire only when the user passed -n/--notify.
 	var notifiers []string
 	for _, n := range globalConfig.Notifiers {
 		if n.Notify == "always" || ((n.Notify == "" || n.Notify == "explicit") && f.Notify) {

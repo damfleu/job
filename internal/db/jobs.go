@@ -193,8 +193,7 @@ func scanJob(s interface{ Scan(...any) error }) (*model.Job, error) {
 	j.Automated = automated != 0
 
 	if exitCode.Valid {
-		n := int(exitCode.Int64)
-		j.ExitCode = &n
+		j.ExitCode = new(int(exitCode.Int64))
 	}
 
 	j.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
