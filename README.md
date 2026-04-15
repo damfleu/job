@@ -50,41 +50,6 @@ The special key `.` always refers to the most recently started job. `job log`, `
 
 Run `job --help` or `job <command> --help` for full usage.
 
-## Configuration
-
-Config file: `$XDG_CONFIG_HOME/job/config.toml` (override with `$JOB_CONFIG_DIR`).
-
-```toml
-[list]
-# Default max completed jobs shown by 'job list'
-limit = 20
-
-[context]
-# Scripts executed in the job's working directory; first one that exits 0 and
-# prints non-empty output wins. Falls back to hostname.
-resolvers = [
-  "$HOME/.local/bin/context-git",
-  "tmux_session",
-]
-
-# One or more notifier programs. Each is invoked with a JSON object on stdin:
-# {"key":"…","command":"…","rc":0,"elapsed":"1m23s"}
-[[notifier]]
-program = "notify-send"
-notify  = "always"    # "always" | "explicit" (default; requires -n)
-
-[[notifier]]
-program = "osascript -e 'display notification …'"
-notify  = "explicit"
-```
-
-**Environment variables:**
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `JOB_CONFIG_DIR` | `$XDG_CONFIG_HOME/job` | Config file directory |
-| `JOB_STATE_DIR` | `$XDG_DATA_HOME/job` | Database and log directory |
-
 ## Concepts
 
 ### Job keys
@@ -135,3 +100,48 @@ job seq run deploy
 Each replay spawns fresh jobs while preserving the original dependency structure.
 
 Jobs referenced by a sequence cannot be deleted to preserve the sequence's runnability.
+
+### Notifications
+
+Notifiers are programs invoked on job completion. Each is called with a JSON object on stdin:
+
+```json
+{"key":"…","command":"…","rc":0,"elapsed":"1m23s"}
+```
+
+Two delivery modes are available: `always` (fires unconditionally) and `explicit` (fires only when `--notify`/`-n` is passed to `run`). Configure notifiers in `config.toml`; see [Configuration](#configuration) for details.
+
+## Configuration
+
+Config file: `$XDG_CONFIG_HOME/job/config.toml` (override with `$JOB_CONFIG_DIR`).
+
+```toml
+[list]
+# Default max completed jobs shown by 'job list'
+limit = 20
+
+[context]
+# Scripts executed in the job's working directory; first one that exits 0 and
+# prints non-empty output wins. Falls back to hostname.
+resolvers = [
+  "$HOME/.local/bin/context-git",
+  "tmux_session",
+]
+
+# One or more notifier programs. Each is invoked with a JSON object on stdin:
+# {"key":"…","command":"…","rc":0,"elapsed":"1m23s"}
+[[notifier]]
+program = "notify-send"
+notify  = "always"    # "always" | "explicit" (default; requires -n)
+
+[[notifier]]
+program = "osascript -e 'display notification …'"
+notify  = "explicit"
+```
+
+**Environment variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `JOB_CONFIG_DIR` | `$XDG_CONFIG_HOME/job` | Config file directory |
+| `JOB_STATE_DIR` | `$XDG_DATA_HOME/job` | Database and log directory |
