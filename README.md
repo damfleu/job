@@ -145,3 +145,7 @@ notify  = "explicit"
 |----------|---------|-------------|
 | `JOB_CONFIG_DIR` | `$XDG_CONFIG_HOME/job` | Config file directory |
 | `JOB_STATE_DIR` | `$XDG_DATA_HOME/job` | Database and log directory |
+
+## Acknowledgements
+
+Inspired by [wwade/jobrunner](https://github.com/wwade/jobrunner).
