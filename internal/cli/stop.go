@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"job/internal/core"
@@ -15,7 +17,11 @@ var stopCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return core.StopJob(globalDB, j.Key)
+		if err := core.StopJob(globalDB, j.Key); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "stopped %s\n", j.Key)
+		return nil
 	},
 }
 
