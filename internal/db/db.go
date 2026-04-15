@@ -56,7 +56,7 @@ func init() {
 // ErrNotFound is returned by Get when no job matches the key.
 var ErrNotFound = errors.New("db: job not found")
 
-// JobStore is the persistence interface for jobs.
+// JobStore is the persistence interface for jobs and sequences.
 type JobStore interface {
 	Insert(job *model.Job) error
 	Get(key string) (*model.Job, error)
@@ -70,6 +70,13 @@ type JobStore interface {
 	FindByKeyPrefix(prefix string) ([]*model.Job, error)
 	GetLastKey() (string, error)
 	SetLastKey(key string) error
+
+	SaveSequence(seq *model.Sequence) error
+	GetSequence(name string) (*model.Sequence, error)
+	ListSequences() ([]*model.Sequence, error)
+	DeleteSequence(name string) error
+	// SequencesForJob returns the names of sequences that reference the given job key.
+	SequencesForJob(jobKey string) ([]string, error)
 }
 
 // DB wraps a SQLite database.

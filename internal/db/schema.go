@@ -34,6 +34,21 @@ CREATE TABLE IF NOT EXISTS metadata (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS sequences (
+    name       TEXT PRIMARY KEY,
+    steps      TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sequence_job_refs (
+    job_key       TEXT NOT NULL,
+    sequence_name TEXT NOT NULL,
+    PRIMARY KEY (job_key, sequence_name),
+    FOREIGN KEY (sequence_name) REFERENCES sequences(name) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_seq_refs_job ON sequence_job_refs(job_key);
 `
 
 func migrate(db *sql.DB) error {

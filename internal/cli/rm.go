@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -21,6 +22,13 @@ var rmCmd = &cobra.Command{
 		}
 		if j.Status != model.StatusCompleted {
 			return fmt.Errorf("job %s is not completed (status: %s)", j.Key, j.Status)
+		}
+		seqs, err := globalDB.SequencesForJob(j.Key)
+		if err != nil {
+			return err
+		}
+		if len(seqs) > 0 {
+			return fmt.Errorf("job %s is referenced by sequence(s): %s", j.Key, strings.Join(seqs, ", "))
 		}
 		if err := core.DeleteJob(globalDB, j); err != nil {
 			return err

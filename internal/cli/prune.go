@@ -55,13 +55,28 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	pruned, skipped := 0, 0
 	for _, j := range jobs {
+		seqs, err := globalDB.SequencesForJob(j.Key)
+		if err != nil {
+			return fmt.Errorf("checking refs for %s: %w", j.Key, err)
+		}
+		if len(seqs) > 0 {
+			fmt.Fprintf(cmd.ErrOrStderr(), "skipping %s: referenced by sequence(s): %s\n", j.Key, strings.Join(seqs, ", "))
+			skipped++
+			continue
+		}
 		if err := core.DeleteJob(globalDB, j); err != nil {
 			return fmt.Errorf("deleting %s: %w", j.Key, err)
 		}
 		printDeleted(cmd, j.Key, j.LogFile)
+		pruned++
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "pruned %d job(s)\n", len(jobs))
+	if skipped > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "pruned %d job(s), skipped %d referenced by sequences\n", pruned, skipped)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "pruned %d job(s)\n", pruned)
+	}
 	return nil
 }
 
