@@ -1,6 +1,9 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 const schema = `
 CREATE TABLE IF NOT EXISTS jobs (
@@ -19,7 +22,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TEXT NOT NULL,
     started_at TEXT,
     stopped_at TEXT,
-    deps       TEXT
+    deps       TEXT,
+    context    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status);
@@ -33,6 +37,13 @@ CREATE TABLE IF NOT EXISTS metadata (
 `
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	// Idempotent: add context column to existing databases.
+	_, err := db.Exec(`ALTER TABLE jobs ADD COLUMN context TEXT`)
+	if err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		return err
+	}
+	return nil
 }

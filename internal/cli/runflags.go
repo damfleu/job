@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"job/internal/core"
 	"job/internal/model"
-
-	"github.com/spf13/cobra"
 )
 
 // RunFlags holds the flags shared between the root run command and subcommands
@@ -53,7 +53,18 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 			notifiers = append(notifiers, n.Program)
 		}
 	}
-	opts := core.RunOptions{Alias: f.Alias, Verbose: f.Verbose, Deps: deps, WorkDir: workDir, Notifiers: notifiers}
+	resolvedWorkDir := workDir
+	if resolvedWorkDir == "" {
+		resolvedWorkDir, _ = os.Getwd()
+	}
+	opts := core.RunOptions{
+		Alias:     f.Alias,
+		Verbose:   f.Verbose,
+		Deps:      deps,
+		WorkDir:   workDir,
+		Notifiers: notifiers,
+		Context:   core.ResolveContext(resolvedWorkDir, globalConfig.Context.Resolvers),
+	}
 	if f.Foreground {
 		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)
 		if err != nil {

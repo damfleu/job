@@ -53,6 +53,9 @@ func printJob(j *model.Job) {
 	}
 	field("Host", j.Hostname)
 	field("User", j.Username)
+	if j.Context != "" {
+		field("Context", j.Context)
+	}
 	field("Created", formatTime(j.CreatedAt))
 	if j.StartedAt != nil {
 		field("Started", formatTime(*j.StartedAt))

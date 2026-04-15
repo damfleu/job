@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"job/internal/config"
+	"job/internal/core"
 	"job/internal/model"
 )
 
@@ -21,6 +22,7 @@ var (
 	lsAll    bool
 	lsFilter string
 	lsLimit  int
+	lsHere   bool
 )
 
 var lsCmd = &cobra.Command{
@@ -39,7 +41,16 @@ var lsCmd = &cobra.Command{
 			limit = globalConfig.List.Limit
 		}
 
-		active, err := globalDB.ListActive(lsFilter)
+		var ctx string
+		if lsHere {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("getting cwd: %w", err)
+			}
+			ctx = core.ResolveContext(cwd, globalConfig.Context.Resolvers)
+		}
+
+		active, err := globalDB.ListActive(lsFilter, ctx)
 		if err != nil {
 			return err
 		}
@@ -49,10 +60,10 @@ var lsCmd = &cobra.Command{
 			var jobs []*model.Job
 			if !lsAll {
 				// fallback: completed only
-				jobs, err = globalDB.ListCompleted(limit, lsFilter)
+				jobs, err = globalDB.ListCompleted(limit, lsFilter, ctx)
 			} else {
 				jobs = append(active, func() []*model.Job {
-					c, _ := globalDB.ListCompleted(limit, lsFilter)
+					c, _ := globalDB.ListCompleted(limit, lsFilter, ctx)
 					return c
 				}()...)
 			}
@@ -77,6 +88,7 @@ func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
 	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show")
+	lsCmd.Flags().BoolVar(&lsHere, "here", false, "filter to jobs in the current context")
 	rootCmd.AddCommand(lsCmd)
 }
 

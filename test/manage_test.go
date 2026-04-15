@@ -61,7 +61,7 @@ func TestPruneOlderThan(t *testing.T) {
 	h.run("run", "-f", "echo", "one")
 	h.run("run", "-f", "echo", "two")
 
-	jobs, err := h.db.ListCompleted(10, "")
+	jobs, err := h.db.ListCompleted(10, "", "")
 	require.NoError(t, err)
 	require.Len(t, jobs, 2)
 	logFiles := []string{jobs[0].LogFile, jobs[1].LogFile}
@@ -70,7 +70,7 @@ func TestPruneOlderThan(t *testing.T) {
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "pruned 2 job(s)")
 
-	remaining, err := h.db.ListCompleted(10, "")
+	remaining, err := h.db.ListCompleted(10, "", "")
 	require.NoError(t, err)
 	assert.Empty(t, remaining)
 

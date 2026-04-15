@@ -23,6 +23,7 @@ type RunOptions struct {
 	Deps      []model.Dep
 	WorkDir   string   // if empty, defaults to os.Getwd()
 	Notifiers []string // programs to call on completion
+	Context   string   // workspace context string
 }
 
 // CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
@@ -50,6 +51,7 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		Status:    model.StatusPending,
 		Hostname:  hostname(),
 		Username:  username(),
+		Context:   opts.Context,
 		CreatedAt: now,
 		Deps:      opts.Deps,
 	}
@@ -148,6 +150,7 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 		Status:    model.StatusPending,
 		Hostname:  hostname(),
 		Username:  username(),
+		Context:   opts.Context,
 		CreatedAt: now,
 		Deps:      opts.Deps,
 	}

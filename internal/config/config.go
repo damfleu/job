@@ -10,7 +10,13 @@ import (
 // Config holds all user-configurable settings.
 type Config struct {
 	List      ListConfig       `toml:"list"`
+	Context   ContextConfig    `toml:"context"`
 	Notifiers []NotifierConfig `toml:"notifier"`
+}
+
+// ContextConfig holds settings for context resolution.
+type ContextConfig struct {
+	Resolvers []string `toml:"resolvers"`
 }
 
 // NotifierConfig holds settings for a single notifier program.

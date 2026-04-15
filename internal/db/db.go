@@ -62,8 +62,8 @@ type JobStore interface {
 	Get(key string) (*model.Job, error)
 	Update(job *model.Job) error
 	Delete(key string) error
-	ListActive(filter string) ([]*model.Job, error)
-	ListCompleted(limit int, filter string) ([]*model.Job, error)
+	ListActive(filter, context string) ([]*model.Job, error)
+	ListCompleted(limit int, filter, context string) ([]*model.Job, error)
 	ListCompletedBefore(t time.Time) ([]*model.Job, error)
 	Search(query string) ([]*model.Job, error)
 	FindByAlias(alias string) (*model.Job, error)

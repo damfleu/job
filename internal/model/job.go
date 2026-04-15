@@ -38,6 +38,7 @@ type Job struct {
 
 	Hostname string
 	Username string
+	Context  string
 
 	CreatedAt time.Time
 	StartedAt *time.Time

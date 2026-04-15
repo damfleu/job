@@ -61,8 +61,8 @@ func (f *fakeStore) SetLastKey(key string) error         { f.lastKey = key; retu
 func (f *fakeStore) Insert(job *model.Job) error         { return nil }
 func (f *fakeStore) Update(job *model.Job) error         { return nil }
 func (f *fakeStore) Delete(key string) error             { return nil }
-func (f *fakeStore) ListActive(filter string) ([]*model.Job, error)                        { return nil, nil }
-func (f *fakeStore) ListCompleted(limit int, filter string) ([]*model.Job, error)          { return nil, nil }
+func (f *fakeStore) ListActive(filter, context string) ([]*model.Job, error)               { return nil, nil }
+func (f *fakeStore) ListCompleted(limit int, filter, context string) ([]*model.Job, error) { return nil, nil }
 func (f *fakeStore) ListCompletedBefore(t time.Time) ([]*model.Job, error)                 { return nil, nil }
 
 func job(key, alias string, cmd []string, status model.Status) *model.Job {

@@ -151,7 +151,7 @@ func TestListActive(t *testing.T) {
 	require.NoError(t, db.Insert(blocked))
 	require.NoError(t, db.Insert(completed))
 
-	jobs, err := db.ListActive("")
+	jobs, err := db.ListActive("", "")
 	require.NoError(t, err)
 	assert.Len(t, jobs, 2)
 	keys := []string{jobs[0].Key, jobs[1].Key}
@@ -172,7 +172,7 @@ func TestListCompleted(t *testing.T) {
 	}
 	require.NoError(t, db.Insert(makeJob("active1"))) // not completed
 
-	jobs, err := db.ListCompleted(10, "")
+	jobs, err := db.ListCompleted(10, "", "")
 	require.NoError(t, err)
 	require.Len(t, jobs, 3)
 	// most recent first
@@ -181,7 +181,7 @@ func TestListCompleted(t *testing.T) {
 	assert.Equal(t, "c1", jobs[2].Key)
 
 	// limit
-	limited, err := db.ListCompleted(2, "")
+	limited, err := db.ListCompleted(2, "", "")
 	require.NoError(t, err)
 	assert.Len(t, limited, 2)
 }
@@ -197,12 +197,12 @@ func TestListActiveFilter(t *testing.T) {
 	require.NoError(t, db.Insert(make1))
 	require.NoError(t, db.Insert(go1))
 
-	results, err := db.ListActive("make")
+	results, err := db.ListActive("make", "")
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, "k1", results[0].Key)
 
-	all, err := db.ListActive("")
+	all, err := db.ListActive("", "")
 	require.NoError(t, err)
 	assert.Len(t, all, 2)
 }
@@ -221,7 +221,7 @@ func TestListCompletedFilter(t *testing.T) {
 	}
 
 	// regex matches "make" commands only
-	results, err := db.ListCompleted(10, "^make")
+	results, err := db.ListCompleted(10, "^make", "")
 	require.NoError(t, err)
 	require.Len(t, results, 2)
 	for _, j := range results {
@@ -229,7 +229,7 @@ func TestListCompletedFilter(t *testing.T) {
 	}
 
 	// limit applies after filter
-	limited, err := db.ListCompleted(1, "^make")
+	limited, err := db.ListCompleted(1, "^make", "")
 	require.NoError(t, err)
 	assert.Len(t, limited, 1)
 }

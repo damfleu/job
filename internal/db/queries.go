@@ -9,12 +9,16 @@ import (
 	"job/internal/model"
 )
 
-func (d *DB) ListActive(filter string) ([]*model.Job, error) {
+func (d *DB) ListActive(filter, context string) ([]*model.Job, error) {
 	query := `SELECT ` + jobCols + ` FROM jobs WHERE status != 'completed'`
 	args := []any{}
 	if filter != "" {
 		query += ` AND cmd_str(command) REGEXP ?`
 		args = append(args, filter)
+	}
+	if context != "" {
+		query += ` AND context = ?`
+		args = append(args, context)
 	}
 	query += ` ORDER BY created_at`
 	rows, err := d.db.Query(query, args...)
@@ -25,12 +29,16 @@ func (d *DB) ListActive(filter string) ([]*model.Job, error) {
 	return scanJobs(rows)
 }
 
-func (d *DB) ListCompleted(limit int, filter string) ([]*model.Job, error) {
+func (d *DB) ListCompleted(limit int, filter, context string) ([]*model.Job, error) {
 	query := `SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed'`
 	args := []any{}
 	if filter != "" {
 		query += ` AND cmd_str(command) REGEXP ?`
 		args = append(args, filter)
+	}
+	if context != "" {
+		query += ` AND context = ?`
+		args = append(args, context)
 	}
 	query += ` ORDER BY stopped_at DESC LIMIT ?`
 	args = append(args, limit)
