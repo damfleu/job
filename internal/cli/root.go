@@ -14,12 +14,15 @@ import (
 	"job/internal/model"
 )
 
+var version = "dev"
+
 var globalDB *db.DB
 var globalConfig config.Config
 
 var rootCmd = &cobra.Command{
 	Use:           "job",
 	Short:         "Run and track jobs",
+	Version:       version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	RunE: func(cmd *cobra.Command, args []string) error {

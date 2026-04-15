@@ -25,7 +25,7 @@ jobs:
         env:
           GOOS: darwin
           GOARCH: ${{ matrix.goarch }}
-        run: go build -ldflags="-s -w" -o job-darwin-${{ matrix.goarch }} .
+        run: go build -ldflags="-s -w -X job/internal/cli.version=${{ github.ref_name }}" -o job-darwin-${{ matrix.goarch }} .
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
