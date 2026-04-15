@@ -32,6 +32,15 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 			}
 			return err
 		}
+
+		// Re-read in case the job was stopped while waiting for deps.
+		j, err = store.Get(key)
+		if err != nil {
+			return err
+		}
+		if j.Status == model.StatusCompleted {
+			return nil
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(j.LogFile), 0o755); err != nil {

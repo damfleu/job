@@ -3,6 +3,7 @@ package integration
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,6 +93,33 @@ func TestDepAfterSuccessFails(t *testing.T) {
 	assert.Equal(t, model.StatusCompleted, j.Status)
 	assert.Equal(t, model.ReasonDepFailed, j.Reason)
 	assert.Nil(t, j.ExitCode)
+}
+
+func TestStopBlockedJobDoesNotRunAfterDepCompletes(t *testing.T) {
+	h := newHarness(t)
+
+	r1 := h.run("run", "-v", "sleep", "2")
+	depKey := strings.TrimSpace(r1.stderr)
+	require.NotEmpty(t, depKey)
+	h.waitFor(depKey, model.StatusRunning)
+
+	r2 := h.run("run", "-v", "-A", depKey, "echo", "should not run")
+	blockedKey := strings.TrimSpace(r2.stderr)
+	require.NotEmpty(t, blockedKey)
+	h.waitFor(blockedKey, model.StatusBlocked)
+
+	h.run("stop", blockedKey)
+
+	j, err := h.db.Get(blockedKey)
+	require.NoError(t, err)
+	require.Equal(t, model.ReasonStopped, j.Reason, "job should be stopped before dep completes")
+
+	h.waitFor(depKey, model.StatusCompleted)
+	time.Sleep(1500 * time.Millisecond) // poll interval is 1s; give the background process time to misbehave
+
+	j, err = h.db.Get(blockedKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.ReasonStopped, j.Reason, "stopped job must not run after dep completes")
 }
 
 func TestDepMixedOrder(t *testing.T) {

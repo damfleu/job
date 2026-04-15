@@ -79,6 +79,16 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 			}
 			return 0, err
 		}
+
+		// Re-read in case the job was stopped while waiting for deps.
+		current, err := store.Get(key)
+		if err != nil {
+			return 0, err
+		}
+		if current.Status == model.StatusCompleted {
+			return 0, nil
+		}
+		j = current
 	}
 
 	lf, err := logfile.Create(stateDir, key)
