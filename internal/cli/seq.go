@@ -50,7 +50,11 @@ var seqSaveCmd = &cobra.Command{
 		if err := core.SaveSequence(globalDB, name, j); err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "saved sequence %q\n", name)
+		seq, err := globalDB.GetSequence(name)
+		if err != nil {
+			return err
+		}
+		printSeqSteps(seq)
 		return nil
 	},
 }

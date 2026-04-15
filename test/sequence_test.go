@@ -27,7 +27,9 @@ func TestSequenceSaveAndList(t *testing.T) {
 
 	r := h.run("sequence", "save", "my-seq", keyB)
 	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stdout, `saved sequence "my-seq"`)
+	assert.Contains(t, r.stdout, "my-seq")
+	assert.Contains(t, r.stdout, keyA)
+	assert.Contains(t, r.stdout, keyB)
 
 	seq, err := h.db.GetSequence("my-seq")
 	require.NoError(t, err)
