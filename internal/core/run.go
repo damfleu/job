@@ -181,7 +181,6 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 	if err != nil {
 		return "", err
 	}
-	lf.Close()
 
 	args := []string{"__exec", key}
 	for _, p := range opts.Notifiers {
@@ -190,9 +189,12 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 	child := exec.Command(os.Args[0], args...)
 	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	child.Env = os.Environ()
+	child.Stderr = lf
 	if err := child.Start(); err != nil {
+		lf.Close()
 		return "", fmt.Errorf("spawning background job: %w", err)
 	}
+	lf.Close()
 
 	return key, nil
 }
