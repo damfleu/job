@@ -16,7 +16,8 @@ var rmCmd = &cobra.Command{
 	Short:   "Delete a completed job",
 	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := core.ResolveKey(globalDB, keyArg(args))
+		resolveHereCtx()
+		j, err := core.ResolveKey(globalDB, keyArg(args), hereCtx)
 		if err != nil {
 			return err
 		}
@@ -46,5 +47,6 @@ func printDeleted(cmd *cobra.Command, key, logFile string) {
 }
 
 func init() {
+	addHereFlag(rmCmd)
 	rootCmd.AddCommand(rmCmd)
 }

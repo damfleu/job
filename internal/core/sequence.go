@@ -47,8 +47,10 @@ func SaveSequence(store db.JobStore, name string, j *model.Job) error {
 
 // RunSequence replays a named sequence by spawning each step as a new background job, remapping
 // dependency keys from the originals to the newly created jobs. It returns the new job keys in step
-// order.
-func RunSequence(store db.JobStore, stateDir, name string) ([]string, error) {
+// order. When workDirOverride is non-empty it is used as the working directory for every step
+// instead of each step's original WorkDir. When contextOverride is non-empty it is used as the
+// context for every step instead of each step's original Context.
+func RunSequence(store db.JobStore, stateDir, name, workDirOverride, contextOverride string) ([]string, error) {
 	seq, err := store.GetSequence(name)
 	if err != nil {
 		return nil, err
@@ -82,9 +84,18 @@ func RunSequence(store db.JobStore, stateDir, name string) ([]string, error) {
 			newDeps[di] = model.Dep{Key: newKeys[stepIdx], Kind: dep.Kind}
 		}
 
+		workDir := orig.WorkDir
+		if workDirOverride != "" {
+			workDir = workDirOverride
+		}
+		context := orig.Context
+		if contextOverride != "" {
+			context = contextOverride
+		}
 		key, err := CreateAndSpawn(store, stateDir, orig.Command, RunOptions{
-			WorkDir:   orig.WorkDir,
+			WorkDir:   workDir,
 			Deps:      newDeps,
+			Context:   context,
 			Automated: true,
 		})
 		if err != nil {

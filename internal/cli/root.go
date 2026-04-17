@@ -19,6 +19,23 @@ var version = "dev"
 var globalDB *db.DB
 var globalConfig config.Config
 
+var here bool
+var hereCtx string
+
+// addHereFlag registers --here on cmd, writing into the shared here global.
+func addHereFlag(cmd *cobra.Command) {
+	cmd.Flags().BoolVar(&here, "here", false, "filter to jobs from the current directory's context")
+}
+
+// resolveHereCtx populates hereCtx when --here was passed. Must be called after
+// globalConfig is loaded (i.e. inside a command's RunE, not in init).
+func resolveHereCtx() {
+	if here {
+		cwd, _ := os.Getwd()
+		hereCtx = core.ResolveContext(cwd, globalConfig.Context.Resolvers)
+	}
+}
+
 var rootCmd = &cobra.Command{
 	Use:           "job",
 	Short:         "Run and track jobs",
@@ -64,7 +81,7 @@ func Execute() {
 func resolveDeps(pending []model.Dep) ([]model.Dep, error) {
 	resolved := make([]model.Dep, len(pending))
 	for i, dep := range pending {
-		j, err := core.ResolveKey(globalDB, dep.Key)
+		j, err := core.ResolveKey(globalDB, dep.Key, "")
 		if err != nil {
 			return nil, fmt.Errorf("resolving dep %q: %w", dep.Key, err)
 		}

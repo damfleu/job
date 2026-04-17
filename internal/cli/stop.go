@@ -14,7 +14,8 @@ var stopCmd = &cobra.Command{
 	Short: "Stop a running job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := core.ResolveKey(globalDB, keyArg(args))
+		resolveHereCtx()
+		j, err := core.ResolveKey(globalDB, keyArg(args), hereCtx)
 		if err != nil {
 			return err
 		}
@@ -42,5 +43,6 @@ var stopCmd = &cobra.Command{
 }
 
 func init() {
+	addHereFlag(stopCmd)
 	rootCmd.AddCommand(stopCmd)
 }

@@ -27,10 +27,12 @@ func init() {
 	pruneCmd.Flags().StringVar(&pruneBefore, "before", "", "delete jobs that completed before this job")
 	pruneCmd.MarkFlagsMutuallyExclusive("older-than", "before")
 	pruneCmd.MarkFlagsOneRequired("older-than", "before")
+	addHereFlag(pruneCmd)
 	rootCmd.AddCommand(pruneCmd)
 }
 
 func runPrune(cmd *cobra.Command, args []string) error {
+	resolveHereCtx()
 	var cutoff time.Time
 	switch {
 	case pruneOlderThan != "":
@@ -40,7 +42,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		}
 		cutoff = time.Now().UTC().Add(-d)
 	case pruneBefore != "":
-		j, err := core.ResolveKey(globalDB, pruneBefore)
+		j, err := core.ResolveKey(globalDB, pruneBefore, hereCtx)
 		if err != nil {
 			return err
 		}
@@ -50,7 +52,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		cutoff = *j.StoppedAt
 	}
 
-	jobs, err := globalDB.ListCompletedBefore(cutoff)
+	jobs, err := globalDB.ListCompletedBefore(cutoff, hereCtx)
 	if err != nil {
 		return err
 	}

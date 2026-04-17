@@ -17,7 +17,8 @@ var logCmd = &cobra.Command{
 	Short: "Display log output for a job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := core.ResolveKey(globalDB, keyArg(args))
+		resolveHereCtx()
+		j, err := core.ResolveKey(globalDB, keyArg(args), hereCtx)
 		if err != nil {
 			return err
 		}
@@ -40,5 +41,6 @@ var logCmd = &cobra.Command{
 
 func init() {
 	logCmd.Flags().BoolVarP(&logPath, "path", "p", false, "print log file path only")
+	addHereFlag(logCmd)
 	rootCmd.AddCommand(logCmd)
 }

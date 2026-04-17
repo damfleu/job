@@ -29,6 +29,7 @@ var seqSaveCmd = &cobra.Command{
 	Short: "Save a job and its deps as a named sequence",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		resolveHereCtx()
 		name := args[0]
 		key := "."
 		if len(args) > 1 {
@@ -42,7 +43,7 @@ var seqSaveCmd = &cobra.Command{
 			last := existing.Steps[len(existing.Steps)-1]
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: replacing existing sequence %q (was: %s)\n", name, last)
 		}
-		j, err := core.ResolveKey(globalDB, key)
+		j, err := core.ResolveKey(globalDB, key, hereCtx)
 		if err != nil {
 			return err
 		}
@@ -58,12 +59,19 @@ var seqSaveCmd = &cobra.Command{
 	},
 }
 
+var seqRunCwd bool
+
 var seqRunCmd = &cobra.Command{
 	Use:   "run <name>",
 	Short: "Replay a sequence",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		newKeys, err := core.RunSequence(globalDB, stateDir(), args[0])
+		var workDirOverride, contextOverride string
+		if seqRunCwd {
+			workDirOverride, _ = os.Getwd()
+			contextOverride = core.ResolveContext(workDirOverride, globalConfig.Context.Resolvers)
+		}
+		newKeys, err := core.RunSequence(globalDB, stateDir(), args[0], workDirOverride, contextOverride)
 		if err != nil {
 			return err
 		}
@@ -127,6 +135,8 @@ var seqRmCmd = &cobra.Command{
 }
 
 func init() {
+	addHereFlag(seqSaveCmd)
+	seqRunCmd.Flags().BoolVar(&seqRunCwd, "cwd", false, "run all steps in the current directory instead of their original directories")
 	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd, seqRmCmd)
 	rootCmd.AddCommand(seqCmd)
 }

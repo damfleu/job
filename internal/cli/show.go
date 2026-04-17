@@ -16,7 +16,8 @@ var showCmd = &cobra.Command{
 	Short: "Show full details for a job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := core.ResolveKey(globalDB, keyArg(args))
+		resolveHereCtx()
+		j, err := core.ResolveKey(globalDB, keyArg(args), hereCtx)
 		if err != nil {
 			return err
 		}
@@ -26,6 +27,7 @@ var showCmd = &cobra.Command{
 }
 
 func init() {
+	addHereFlag(showCmd)
 	rootCmd.AddCommand(showCmd)
 }
 
