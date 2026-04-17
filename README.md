@@ -78,7 +78,7 @@ Use `-a`/`-A` multiple times to specify multiple dependencies. A job whose `--af
 
 ### Context
 
-Context resolvers scope jobs to a workspace, enabling `job list --here`. See `contrib/` for examples.
+Context resolvers scope jobs to a workspace. Most commands accept `--here` to scope `.` resolution to the current context instead of globally. Commands that spawn jobs (`retry`, `seq run`) also accept `--cwd` to run in the current directory instead of the original. See `contrib/` for resolver examples.
 
 ### Sequences
 
