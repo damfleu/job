@@ -9,12 +9,15 @@ import (
 )
 
 // ResolveKey maps a user-supplied input to a job, using these strategies in order:
-//  1. "." means the most recently started job
+//  1. "." means the most recently started job (scoped to ctx when non-empty)
 //  2. Exact match on key or alias
 //  3. Substring match on command (active jobs preferred over completed)
 //  4. Prefix match on key
-func ResolveKey(store db.JobStore, input string) (*model.Job, error) {
+func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	if input == "." {
+		if ctx != "" {
+			return resolveDotInContext(store, ctx)
+		}
 		return resolveDot(store)
 	}
 
@@ -69,6 +72,17 @@ func resolveDot(store db.JobStore) (*model.Job, error) {
 	}
 	if key == "" {
 		return nil, errors.New("no jobs have been run yet")
+	}
+	return store.Get(key)
+}
+
+func resolveDotInContext(store db.JobStore, ctx string) (*model.Job, error) {
+	key, err := store.GetLastKeyForContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if key == "" {
+		return nil, fmt.Errorf("no jobs in current context %q", ctx)
 	}
 	return store.Get(key)
 }
