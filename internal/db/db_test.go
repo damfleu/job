@@ -321,11 +321,99 @@ func TestListCompletedBefore(t *testing.T) {
 	require.NoError(t, db.Insert(makeJob("active1"))) // not completed, must be excluded
 
 	cutoff := now.Add(2 * time.Hour) // old1 and old2 are before this, new1 is not
-	jobs, err := db.ListCompletedBefore(cutoff)
+	jobs, err := db.ListCompletedBefore(cutoff, "")
 	require.NoError(t, err)
 	require.Len(t, jobs, 2)
 	keys := []string{jobs[0].Key, jobs[1].Key}
 	assert.ElementsMatch(t, []string{"old1", "old2"}, keys)
+}
+
+func TestListActiveContext(t *testing.T) {
+	db := openMemDB(t)
+
+	a := makeJob("a1")
+	a.Context = "projectA"
+	b := makeJob("b1")
+	b.Context = "projectB"
+	require.NoError(t, db.Insert(a))
+	require.NoError(t, db.Insert(b))
+
+	results, err := db.ListActive("", "projectA")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "a1", results[0].Key)
+}
+
+func TestListCompletedContext(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	a := makeJob("a1")
+	a.Status = model.StatusCompleted
+	a.Context = "projectA"
+	a.StoppedAt = new(now.Truncate(time.Millisecond))
+	b := makeJob("b1")
+	b.Status = model.StatusCompleted
+	b.Context = "projectB"
+	b.StoppedAt = new(now.Add(time.Second).Truncate(time.Millisecond))
+	require.NoError(t, db.Insert(a))
+	require.NoError(t, db.Insert(b))
+
+	results, err := db.ListCompleted(10, "", "projectA")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "a1", results[0].Key)
+}
+
+func TestGetLastKeyForContext(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	older := makeJob("older")
+	older.Context = "projectA"
+	older.CreatedAt = now.Add(-time.Minute).Truncate(time.Millisecond)
+	newer := makeJob("newer")
+	newer.Context = "projectA"
+	newer.CreatedAt = now.Truncate(time.Millisecond)
+	other := makeJob("other")
+	other.Context = "projectB"
+	other.CreatedAt = now.Add(time.Minute).Truncate(time.Millisecond)
+	require.NoError(t, db.Insert(older))
+	require.NoError(t, db.Insert(newer))
+	require.NoError(t, db.Insert(other))
+
+	// returns most recent job in the given context
+	key, err := db.GetLastKeyForContext("projectA")
+	require.NoError(t, err)
+	assert.Equal(t, "newer", key)
+
+	// different context is unaffected
+	key, err = db.GetLastKeyForContext("projectB")
+	require.NoError(t, err)
+	assert.Equal(t, "other", key)
+
+	// unknown context returns empty string
+	key, err = db.GetLastKeyForContext("unknown")
+	require.NoError(t, err)
+	assert.Empty(t, key)
+}
+
+func TestGetLastKeyForContextExcludesAutomated(t *testing.T) {
+	db := openMemDB(t)
+
+	automated := makeJob("automated")
+	automated.Context = "projectA"
+	automated.Automated = true
+	human := makeJob("human")
+	human.Context = "projectA"
+	human.CreatedAt = time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	require.NoError(t, db.Insert(automated))
+	require.NoError(t, db.Insert(human))
+
+	// automated job should not be returned
+	key, err := db.GetLastKeyForContext("projectA")
+	require.NoError(t, err)
+	assert.Equal(t, "human", key)
 }
 
 func TestLastKey(t *testing.T) {

@@ -50,16 +50,35 @@ func (d *DB) ListCompleted(limit int, filter, context string) ([]*model.Job, err
 	return scanJobs(rows)
 }
 
-func (d *DB) ListCompletedBefore(t time.Time) ([]*model.Job, error) {
-	rows, err := d.db.Query(
-		`SELECT `+jobCols+` FROM jobs WHERE status = 'completed' AND stopped_at < ? ORDER BY stopped_at`,
-		t.UTC().Format(time.RFC3339Nano),
-	)
+func (d *DB) ListCompletedBefore(t time.Time, context string) ([]*model.Job, error) {
+	query := `SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed' AND stopped_at < ?`
+	args := []any{t.UTC().Format(time.RFC3339Nano)}
+	if context != "" {
+		query += ` AND context = ?`
+		args = append(args, context)
+	}
+	query += ` ORDER BY stopped_at`
+	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: list completed before: %w", err)
 	}
 	defer rows.Close()
 	return scanJobs(rows)
+}
+
+func (d *DB) GetLastKeyForContext(context string) (string, error) {
+	var key string
+	err := d.db.QueryRow(
+		`SELECT key FROM jobs WHERE context = ? AND automated = 0 ORDER BY created_at DESC LIMIT 1`,
+		context,
+	).Scan(&key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("db: get last key for context %q: %w", context, err)
+	}
+	return key, nil
 }
 
 func (d *DB) Search(query string) ([]*model.Job, error) {

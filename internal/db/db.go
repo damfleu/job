@@ -64,11 +64,12 @@ type JobStore interface {
 	Delete(key string) error
 	ListActive(filter, context string) ([]*model.Job, error)
 	ListCompleted(limit int, filter, context string) ([]*model.Job, error)
-	ListCompletedBefore(t time.Time) ([]*model.Job, error)
+	ListCompletedBefore(t time.Time, context string) ([]*model.Job, error)
 	Search(query string) ([]*model.Job, error)
 	FindByAlias(alias string) (*model.Job, error)
 	FindByKeyPrefix(prefix string) ([]*model.Job, error)
 	GetLastKey() (string, error)
+	GetLastKeyForContext(context string) (string, error)
 	SetLastKey(key string) error
 
 	SaveSequence(seq *model.Sequence) error
