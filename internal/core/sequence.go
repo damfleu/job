@@ -45,65 +45,49 @@ func SaveSequence(store db.JobStore, name string, j *model.Job) error {
 	})
 }
 
-// RunSequence replays a named sequence by spawning each step as a new background job, remapping
-// dependency keys from the originals to the newly created jobs. It returns the new job keys in step
-// order. When workDirOverride is non-empty it is used as the working directory for every step
-// instead of each step's original WorkDir. When contextOverride is non-empty it is used as the
-// context for every step instead of each step's original Context.
-func RunSequence(store db.JobStore, stateDir, name, workDirOverride, contextOverride string) ([]string, error) {
+// SequenceStep describes one step of a sequence as returned by ExpandSequence. Deps still
+// reference the original job keys from when the sequence was saved; the caller is responsible
+// for remapping them to the keys of the newly spawned jobs.
+type SequenceStep struct {
+	OriginalKey string
+	Command     []string
+	WorkDir     string
+	Context     string
+	Deps        []model.Dep
+}
+
+// ExpandSequence loads a named sequence and returns its steps in topological order as plain
+// descriptors, without spawning anything. When workDirOverride is non-empty it replaces each
+// step's original WorkDir; similarly for contextOverride.
+func ExpandSequence(store db.JobStore, name, workDirOverride, contextOverride string) ([]SequenceStep, error) {
 	seq, err := store.GetSequence(name)
 	if err != nil {
 		return nil, err
 	}
 
-	origJobs := make([]*model.Job, len(seq.Steps))
+	steps := make([]SequenceStep, len(seq.Steps))
 	for i, key := range seq.Steps {
 		j, err := store.Get(key)
 		if err != nil {
 			return nil, fmt.Errorf("sequence %s: loading step %d (%s): %w", name, i, key, err)
 		}
-		origJobs[i] = j
-	}
-
-	// Map original job key → its position in the steps slice.
-	keyToStep := make(map[string]int, len(seq.Steps))
-	for i, key := range seq.Steps {
-		keyToStep[key] = i
-	}
-
-	// Spawn each step in topological order, substituting old dep keys with the keys of the newly
-	// spawned jobs.
-	newKeys := make([]string, len(seq.Steps))
-	for i, orig := range origJobs {
-		newDeps := make([]model.Dep, len(orig.Deps))
-		for di, dep := range orig.Deps {
-			stepIdx, ok := keyToStep[dep.Key]
-			if !ok {
-				return nil, fmt.Errorf("sequence %s: step %d dep %s is outside the sequence", name, i, dep.Key)
-			}
-			newDeps[di] = model.Dep{Key: newKeys[stepIdx], Kind: dep.Kind}
-		}
-
-		workDir := orig.WorkDir
+		workDir := j.WorkDir
 		if workDirOverride != "" {
 			workDir = workDirOverride
 		}
-		context := orig.Context
+		context := j.Context
 		if contextOverride != "" {
 			context = contextOverride
 		}
-		key, err := CreateAndSpawn(store, stateDir, orig.Command, RunOptions{
-			WorkDir:   workDir,
-			Deps:      newDeps,
-			Context:   context,
-			Automated: true,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("sequence %s: spawning step %d: %w", name, i, err)
+		steps[i] = SequenceStep{
+			OriginalKey: key,
+			Command:     j.Command,
+			WorkDir:     workDir,
+			Context:     context,
+			Deps:        j.Deps,
 		}
-		newKeys[i] = key
 	}
-	return newKeys, nil
+	return steps, nil
 }
 
 // topoSort performs Kahn's algorithm on a map of jobs, returning keys ordered so that every

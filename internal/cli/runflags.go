@@ -37,12 +37,14 @@ func (d depFlag) Set(val string) error {
 	return nil
 }
 
-// launchJob creates and starts a job using command and workDir (empty = cwd), honouring the
-// foreground/background choice in f. It is shared by the root run path and retry.
-func launchJob(command []string, workDir string, f RunFlags) error {
+// buildRunOptions resolves deps and notifiers from f and returns a fully populated RunOptions.
+// workDir may be empty, in which case the cwd is used for context resolution (but WorkDir in
+// the returned options stays empty so CreateAndSpawn/CreateAndRunForeground can apply their own
+// default).
+func buildRunOptions(command []string, workDir string, f RunFlags) (core.RunOptions, error) {
 	deps, err := resolveDeps(f.Deps)
 	if err != nil {
-		return err
+		return core.RunOptions{}, err
 	}
 	// Build the list of notifier programs to call when the job completes. "always" notifiers fire
 	// unconditionally; "explicit" (or unset) notifiers fire only when the user passed -n/--notify.
@@ -56,7 +58,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 	if resolvedWorkDir == "" {
 		resolvedWorkDir, _ = os.Getwd()
 	}
-	opts := core.RunOptions{
+	return core.RunOptions{
 		Alias:     f.Alias,
 		Verbose:   f.Verbose,
 		Deps:      deps,
@@ -64,6 +66,15 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 		Notifiers: notifiers,
 		Context:   core.ResolveContext(resolvedWorkDir, globalConfig.Context.Resolvers),
 		Automated: f.Automated,
+	}, nil
+}
+
+// launchJob creates and starts a job using command and workDir (empty = cwd), honouring the
+// foreground/background choice in f. It is shared by the root run path and retry.
+func launchJob(command []string, workDir string, f RunFlags) error {
+	opts, err := buildRunOptions(command, workDir, f)
+	if err != nil {
+		return err
 	}
 	if f.Foreground {
 		exitCode, err := core.CreateAndRunForeground(globalDB, stateDir(), command, opts)

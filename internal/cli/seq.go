@@ -60,6 +60,7 @@ var seqSaveCmd = &cobra.Command{
 }
 
 var seqRunCwd bool
+var seqRunNotify bool
 
 var seqRunCmd = &cobra.Command{
 	Use:   "run <name>",
@@ -71,10 +72,31 @@ var seqRunCmd = &cobra.Command{
 			workDirOverride, _ = os.Getwd()
 			contextOverride = core.ResolveContext(workDirOverride, globalConfig.Context.Resolvers)
 		}
-		newKeys, err := core.RunSequence(globalDB, stateDir(), args[0], workDirOverride, contextOverride)
+		steps, err := core.ExpandSequence(globalDB, args[0], workDirOverride, contextOverride)
 		if err != nil {
 			return err
 		}
+
+		newKeys := make([]string, len(steps))
+		origToNew := make(map[string]string, len(steps))
+
+		for i, step := range steps {
+			opts, err := buildRunOptions(step.Command, step.WorkDir, RunFlags{
+				Notify:    seqRunNotify,
+				Deps:      remapDeps(step.Deps, origToNew),
+				Automated: true,
+			})
+			if err != nil {
+				return err
+			}
+			key, err := core.CreateAndSpawn(globalDB, stateDir(), step.Command, opts)
+			if err != nil {
+				return fmt.Errorf("sequence: spawning step %d: %w", i, err)
+			}
+			origToNew[step.OriginalKey] = key
+			newKeys[i] = key
+		}
+
 		// Load each new job to display its command alongside the key.
 		for _, key := range newKeys {
 			j, err := globalDB.Get(key)
@@ -86,6 +108,18 @@ var seqRunCmd = &cobra.Command{
 		}
 		return nil
 	},
+}
+
+// remapDeps returns a copy of deps with each key substituted using origToNew.
+func remapDeps(deps []model.Dep, origToNew map[string]string) []model.Dep {
+	if len(deps) == 0 {
+		return deps
+	}
+	out := make([]model.Dep, len(deps))
+	for i, dep := range deps {
+		out[i] = model.Dep{Key: origToNew[dep.Key], Kind: dep.Kind}
+	}
+	return out
 }
 
 var seqListCmd = &cobra.Command{
@@ -137,6 +171,7 @@ var seqRmCmd = &cobra.Command{
 func init() {
 	addHereFlag(seqSaveCmd)
 	seqRunCmd.Flags().BoolVar(&seqRunCwd, "cwd", false, "run all steps in the current directory instead of their original directories")
+	seqRunCmd.Flags().BoolVarP(&seqRunNotify, "notify", "n", false, "notify on completion of each step")
 	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd, seqRmCmd)
 	rootCmd.AddCommand(seqCmd)
 }
