@@ -332,6 +332,12 @@ func age(t time.Time) string {
 // Completed jobs show their reason instead of "completed".
 func jobStatusText(j *model.Job) string {
 	if j.Status == model.StatusCompleted {
+		if j.Reason == model.ReasonExited {
+			if j.ExitCode != nil && *j.ExitCode == 0 {
+				return "completed"
+			}
+			return "failed"
+		}
 		return string(j.Reason)
 	}
 	return string(j.Status)
@@ -341,7 +347,7 @@ func jobStatusText(j *model.Job) string {
 func jobStatusStyle(j *model.Job) lipgloss.Style {
 	switch j.Status {
 	case model.StatusRunning:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("4"))
 	case model.StatusBlocked:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
 	case model.StatusCompleted:
@@ -354,7 +360,7 @@ func jobStatusStyle(j *model.Job) lipgloss.Style {
 			if j.ExitCode != nil && *j.ExitCode != 0 {
 				return lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 			}
-			return lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+			return lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
 		}
 	}
 	return lipgloss.NewStyle()

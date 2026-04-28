@@ -49,6 +49,31 @@ func jobKeys(jobs []*model.Job) []string {
 	return keys
 }
 
+func TestJobStatusText(t *testing.T) {
+	rc0 := 0
+	rc1 := 1
+
+	tests := []struct {
+		name string
+		job  *model.Job
+		want string
+	}{
+		{"running", &model.Job{Status: model.StatusRunning}, "running"},
+		{"blocked", &model.Job{Status: model.StatusBlocked}, "blocked"},
+		{"pending", &model.Job{Status: model.StatusPending}, "pending"},
+		{"exited rc=0", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited, ExitCode: &rc0}, "completed"},
+		{"exited rc=1", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited, ExitCode: &rc1}, "failed"},
+		{"exited no rc", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited}, "failed"},
+		{"stopped", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonStopped}, "stopped"},
+		{"dep_failed", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonDepFailed}, "dep_failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, jobStatusText(tt.job))
+		})
+	}
+}
+
 func TestExpandDepsNoDeps(t *testing.T) {
 	d := openTestDB(t)
 	running := makeTestJob("run1", model.StatusRunning)
