@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"job/internal/model"
@@ -45,6 +46,27 @@ func (d *DB) ListCompleted(limit int, filter, context string) ([]*model.Job, err
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: list completed: %w", err)
+	}
+	defer rows.Close()
+	return scanJobs(rows)
+}
+
+func (d *DB) GetByKeys(keys []string) ([]*model.Job, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.Repeat("?,", len(keys))
+	placeholders = placeholders[:len(placeholders)-1]
+	args := make([]any, len(keys))
+	for i, k := range keys {
+		args[i] = k
+	}
+	rows, err := d.db.Query(
+		`SELECT `+jobCols+` FROM jobs WHERE key IN (`+placeholders+`) ORDER BY created_at`,
+		args...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: get by keys: %w", err)
 	}
 	defer rows.Close()
 	return scanJobs(rows)

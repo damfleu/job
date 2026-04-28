@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"job/internal/config"
+	"job/internal/db"
 	"job/internal/model"
 )
 
@@ -70,7 +71,11 @@ var lsCmd = &cobra.Command{
 		}
 
 		// active jobs only: tree
-		fmt.Print(renderTree(active))
+		all, err := expandDeps(globalDB, active)
+		if err != nil {
+			return err
+		}
+		fmt.Print(renderTree(all))
 		return nil
 	},
 }
@@ -127,10 +132,53 @@ func renderTree(jobs []*model.Job) string {
 func nodeLabel(j *model.Job) string {
 	return fmt.Sprintf("%s  %s  %s  %s",
 		displayKey(j),
-		statusStyle(j.Status).Render(string(j.Status)),
+		jobStatusStyle(j).Render(jobStatusText(j)),
 		displayCmd(j.Command),
 		displayAge(j),
 	)
+}
+
+// expandDeps augments a set of jobs with their transitive completed dependencies.
+func expandDeps(d *db.DB, seed []*model.Job) ([]*model.Job, error) {
+	byKey := make(map[string]*model.Job, len(seed))
+	for _, j := range seed {
+		byKey[j.Key] = j
+	}
+
+	var pending []string
+	for _, j := range seed {
+		for _, dep := range j.Deps {
+			if _, seen := byKey[dep.Key]; !seen {
+				byKey[dep.Key] = nil
+				pending = append(pending, dep.Key)
+			}
+		}
+	}
+
+	for len(pending) > 0 {
+		fetched, err := d.GetByKeys(pending)
+		if err != nil {
+			return nil, err
+		}
+		pending = pending[:0]
+		for _, j := range fetched {
+			byKey[j.Key] = j
+			for _, dep := range j.Deps {
+				if _, seen := byKey[dep.Key]; !seen {
+					byKey[dep.Key] = nil
+					pending = append(pending, dep.Key)
+				}
+			}
+		}
+	}
+
+	result := make([]*model.Job, 0, len(byKey))
+	for _, j := range byKey {
+		if j != nil {
+			result = append(result, j)
+		}
+	}
+	return result, nil
 }
 
 func printTable(jobs []*model.Job) {
@@ -277,18 +325,6 @@ func age(t time.Time) string {
 		return fmt.Sprintf("%dh", int(d.Hours()))
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	}
-}
-
-// statusStyle is used in the tree view for active jobs.
-func statusStyle(s model.Status) lipgloss.Style {
-	switch s {
-	case model.StatusRunning:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("2"))
-	case model.StatusBlocked:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
-	default:
-		return lipgloss.NewStyle()
 	}
 }
 

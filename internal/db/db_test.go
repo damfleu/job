@@ -416,6 +416,40 @@ func TestGetLastKeyForContextExcludesAutomated(t *testing.T) {
 	assert.Equal(t, "human", key)
 }
 
+func TestGetByKeys(t *testing.T) {
+	db := openMemDB(t)
+
+	j1 := makeJob("k1")
+	j2 := makeJob("k2")
+	j3 := makeJob("k3")
+	require.NoError(t, db.Insert(j1))
+	require.NoError(t, db.Insert(j2))
+	require.NoError(t, db.Insert(j3))
+
+	got, err := db.GetByKeys([]string{"k1", "k3"})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	keys := []string{got[0].Key, got[1].Key}
+	assert.ElementsMatch(t, []string{"k1", "k3"}, keys)
+}
+
+func TestGetByKeysEmpty(t *testing.T) {
+	db := openMemDB(t)
+	got, err := db.GetByKeys(nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestGetByKeysUnknown(t *testing.T) {
+	db := openMemDB(t)
+	require.NoError(t, db.Insert(makeJob("k1")))
+
+	got, err := db.GetByKeys([]string{"k1", "missing"})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "k1", got[0].Key)
+}
+
 func TestLastKey(t *testing.T) {
 	db := openMemDB(t)
 
