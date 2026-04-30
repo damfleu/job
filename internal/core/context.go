@@ -13,7 +13,6 @@ import (
 // Falls back to hostname if no resolver matches.
 func ResolveContext(workDir string, resolvers []string) string {
 	for _, r := range resolvers {
-		r = os.ExpandEnv(r)
 		if out := runResolver(r, workDir); out != "" {
 			return out
 		}
@@ -27,7 +26,7 @@ func runResolver(path, workDir string) string {
 	defer cancel()
 
 	var buf bytes.Buffer
-	cmd := exec.CommandContext(ctx, path)
+	cmd := exec.CommandContext(ctx, "sh", "-c", path)
 	cmd.Dir = workDir
 	cmd.Stdout = &buf
 
