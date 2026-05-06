@@ -113,7 +113,7 @@ func TestStopBlockedJobShowsRunningDep(t *testing.T) {
 	h.waitFor(depKey, model.StatusRunning)
 
 	r2 := h.run("run", "-v", "-A", depKey, "echo", "queued")
-	blockedKey := strings.TrimSpace(r2.stderr)
+	blockedKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, blockedKey)
 	h.waitFor(blockedKey, model.StatusBlocked)
 

@@ -108,7 +108,11 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 	}
 
 	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "%s running\n", key)
+		if len(opts.Deps) > 0 {
+			fmt.Fprintf(os.Stderr, "%s running (%s)\n", key, model.FormatDeps(opts.Deps))
+		} else {
+			fmt.Fprintf(os.Stderr, "%s running\n", key)
+		}
 	}
 
 	exitCode, runErr := runForeground(command, workDir, lf)

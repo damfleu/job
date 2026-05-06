@@ -22,7 +22,7 @@ func TestDepAliasResolvesToMostRecentJob(t *testing.T) {
 
 	// dep should block on the NEW running job, not the old completed one
 	r := h.run("run", "-v", "-a", "shared-key", "echo", "child")
-	childKey := strings.TrimSpace(r.stderr)
+	childKey := strings.Fields(r.stderr)[0]
 	require.NotEmpty(t, childKey)
 
 	h.waitFor(childKey, model.StatusBlocked)
@@ -39,7 +39,7 @@ func TestDepBlocksUntilDepCompletes(t *testing.T) {
 	require.NotEmpty(t, depKey)
 
 	r2 := h.run("run", "-v", "-a", "dep-job", "echo", "child")
-	childKey := strings.TrimSpace(r2.stderr)
+	childKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, childKey)
 
 	h.waitFor(childKey, model.StatusBlocked)
@@ -63,7 +63,7 @@ func TestDepAfter(t *testing.T) {
 	depKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
 
 	r2 := h.run("run", "-v", "-a", depKey, "echo", "dependent job")
-	childKey := strings.TrimSpace(r2.stderr)
+	childKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, childKey)
 
 	h.waitFor(childKey, model.StatusCompleted)
@@ -83,7 +83,7 @@ func TestDepAfterSuccessFails(t *testing.T) {
 	depKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
 
 	r2 := h.run("run", "-v", "-A", depKey, "echo", "should not run")
-	childKey := strings.TrimSpace(r2.stderr)
+	childKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, childKey)
 
 	h.waitFor(childKey, model.StatusCompleted)
@@ -104,7 +104,7 @@ func TestStopBlockedJobDoesNotRunAfterDepCompletes(t *testing.T) {
 	h.waitFor(depKey, model.StatusRunning)
 
 	r2 := h.run("run", "-v", "-A", depKey, "echo", "should not run")
-	blockedKey := strings.TrimSpace(r2.stderr)
+	blockedKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, blockedKey)
 	h.waitFor(blockedKey, model.StatusBlocked)
 
@@ -136,7 +136,7 @@ func TestDepMixedOrder(t *testing.T) {
 
 	// interleaved: -A, -a, -A — order must be preserved
 	r4 := h.run("run", "-v", "-A", keyA, "-a", keyB, "-A", keyC, "echo", "child")
-	childKey := strings.TrimSpace(r4.stderr)
+	childKey := strings.Fields(r4.stderr)[0]
 	require.NotEmpty(t, childKey)
 
 	h.waitFor(childKey, model.StatusCompleted)

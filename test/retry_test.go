@@ -108,7 +108,7 @@ func TestRetryWithDep(t *testing.T) {
 	h.waitFor(depKey, model.StatusRunning)
 
 	r2 := h.run("retry", "-v", "-a", depKey, orig.Key)
-	retryKey := strings.TrimSpace(r2.stderr)
+	retryKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, retryKey)
 
 	time.Sleep(200 * time.Millisecond)

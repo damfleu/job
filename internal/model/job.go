@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Status is the lifecycle state of a job.
 type Status string
@@ -60,4 +63,13 @@ const (
 type Dep struct {
 	Key  string
 	Kind DepKind
+}
+
+// FormatDeps returns a human-readable summary of deps, e.g. "after foo, after-success bar".
+func FormatDeps(deps []Dep) string {
+	parts := make([]string, len(deps))
+	for i, d := range deps {
+		parts[i] = strings.ReplaceAll(string(d.Kind), "_", "-") + " " + d.Key
+	}
+	return strings.Join(parts, ", ")
 }

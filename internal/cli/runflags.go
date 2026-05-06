@@ -105,7 +105,11 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 		return nil
 	}
 	if f.Verbose {
-		fmt.Fprintln(os.Stderr, key)
+		if len(opts.Deps) > 0 {
+			fmt.Fprintf(os.Stderr, "%s (%s)\n", key, model.FormatDeps(opts.Deps))
+		} else {
+			fmt.Fprintln(os.Stderr, key)
+		}
 	}
 	return nil
 }
