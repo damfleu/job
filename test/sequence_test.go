@@ -74,7 +74,7 @@ func TestSequenceShow(t *testing.T) {
 	assert.Contains(t, r.stdout, keyB)
 	assert.Contains(t, r.stdout, "echo step-a")
 	assert.Contains(t, r.stdout, "echo step-b")
-	assert.Contains(t, r.stdout, "after-success")
+	assert.Contains(t, r.stdout, "✓")
 }
 
 func TestSequenceRun(t *testing.T) {

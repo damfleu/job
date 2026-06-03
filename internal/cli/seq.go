@@ -4,8 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/tree"
 	"github.com/charmbracelet/x/term"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
@@ -200,54 +203,83 @@ func printSeqTable(seqs []*model.Sequence) {
 }
 
 func printSeqSteps(seq *model.Sequence) {
-	// Load each job to display its command and remap dep keys to step indices.
 	jobs := make([]*model.Job, len(seq.Steps))
-	keyToStep := make(map[string]int, len(seq.Steps))
 	for i, key := range seq.Steps {
-		keyToStep[key] = i
 		j, err := globalDB.Get(key)
 		if err != nil {
-			// Job may have been deleted; show the key with a placeholder.
 			jobs[i] = &model.Job{Key: key, Command: []string{"<unavailable>"}}
 		} else {
 			jobs[i] = j
 		}
 	}
-
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"#", "KEY", "COMMAND", "DEPS"})
-	for i, j := range jobs {
-		t.AppendRow(table.Row{
-			fmt.Sprintf("%d", i),
-			j.Key,
-			strings.Join(j.Command, " "),
-			formatStepDeps(j.Deps, keyToStep),
-		})
-	}
 	fmt.Fprintf(os.Stdout, "%s\n\n", seq.Name)
-	if !term.IsTerminal(os.Stdout.Fd()) {
-		t.RenderTSV()
-		return
-	}
-	t.SetStyle(jobTableStyle())
-	t.Render()
+	fmt.Print(renderSeqTree(jobs))
 }
 
-// formatStepDeps renders a job's deps as "after-success 1, after 0" using step
-// indices instead of job keys.
-func formatStepDeps(deps []model.Dep, keyToStep map[string]int) string {
-	if len(deps) == 0 {
-		return ""
+// seqEdge pairs a child job with the dep kind linking it to its parent.
+type seqEdge struct {
+	job  *model.Job
+	kind model.DepKind
+}
+
+// renderSeqTree renders the sequence steps as a dependency tree, with ✓/~ prefixes
+// indicating after-success / after dep kinds on each child node.
+func renderSeqTree(jobs []*model.Job) string {
+	byKey := make(map[string]*model.Job, len(jobs))
+	for _, j := range jobs {
+		byKey[j.Key] = j
 	}
-	parts := make([]string, len(deps))
-	for i, dep := range deps {
-		kind := strings.ReplaceAll(string(dep.Kind), "_", "-")
-		if step, ok := keyToStep[dep.Key]; ok {
-			parts[i] = fmt.Sprintf("%s %d", kind, step)
-		} else {
-			parts[i] = fmt.Sprintf("%s %s", kind, dep.Key)
+
+	children := make(map[string][]seqEdge)
+	isChild := make(map[string]bool)
+	for _, j := range jobs {
+		for _, dep := range j.Deps {
+			if _, inSeq := byKey[dep.Key]; inSeq {
+				children[dep.Key] = append(children[dep.Key], seqEdge{job: j, kind: dep.Kind})
+				isChild[j.Key] = true
+			}
 		}
 	}
-	return strings.Join(parts, ", ")
+	for key := range children {
+		sort.Slice(children[key], func(i, j int) bool {
+			return children[key][i].job.Key < children[key][j].job.Key
+		})
+	}
+
+	var roots []*model.Job
+	for _, j := range jobs {
+		if !isChild[j.Key] {
+			roots = append(roots, j)
+		}
+	}
+
+	var buildNode func(j *model.Job, kind model.DepKind, isRoot bool) *tree.Tree
+	buildNode = func(j *model.Job, kind model.DepKind, isRoot bool) *tree.Tree {
+		label := seqNodeLabel(j, kind, isRoot)
+		t := tree.Root(label)
+		for _, edge := range children[j.Key] {
+			t.Child(buildNode(edge.job, edge.kind, false))
+		}
+		return t
+	}
+
+	var parts []string
+	for _, root := range roots {
+		parts = append(parts, buildNode(root, "", true).String())
+	}
+	return strings.Join(parts, "\n") + "\n"
+}
+
+func seqNodeLabel(j *model.Job, kind model.DepKind, isRoot bool) string {
+	prefix := ""
+	if !isRoot {
+		switch kind {
+		case model.DepAfterSuccess:
+			prefix = "✓ "
+		case model.DepAfter:
+			prefix = "→ "
+		}
+	}
+	key := lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(j.Key)
+	return fmt.Sprintf("%s%s  %s", prefix, key, displayCmd(j.Command))
 }
