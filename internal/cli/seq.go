@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/x/term"
@@ -70,14 +69,10 @@ var seqRunCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var workDirOverride, contextOverride string
 		if seqRunCwd != "" {
-			if seqRunCwd == "." {
-				workDirOverride, _ = os.Getwd()
-			} else {
-				var err error
-				workDirOverride, err = filepath.Abs(seqRunCwd)
-				if err != nil {
-					return fmt.Errorf("resolving --cwd: %w", err)
-				}
+			var err error
+			workDirOverride, err = resolveCwdFlag(seqRunCwd)
+			if err != nil {
+				return fmt.Errorf("resolving --cwd: %w", err)
 			}
 			contextOverride = core.ResolveContext(workDirOverride, globalConfig.Context.Resolvers)
 		}
@@ -179,8 +174,7 @@ var seqRmCmd = &cobra.Command{
 
 func init() {
 	addHereFlag(seqSaveCmd)
-	seqRunCmd.Flags().StringVar(&seqRunCwd, "cwd", "", "run steps in a directory instead of their original directories")
-	seqRunCmd.Flags().Lookup("cwd").NoOptDefVal = "."
+	addCwdFlag(seqRunCmd, &seqRunCwd, "run steps in a directory instead of their original directories")
 	seqRunCmd.Flags().BoolVarP(&seqRunNotify, "notify", "n", false, "notify on completion of each step")
 	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd, seqRmCmd)
 	rootCmd.AddCommand(seqCmd)

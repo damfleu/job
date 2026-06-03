@@ -24,6 +24,8 @@ go install .
 # Run a command in the background
 job run <command>
 job run -- <command>
+# Run a command in a specific directory
+job run --cwd <dir> -- <command>
 # Run in the background and tail its output
 job run -w -- <command>
 # Run a command after another job has completed
@@ -78,7 +80,7 @@ Use `-a`/`-A` multiple times to specify multiple dependencies. A job whose `--af
 
 ### Context
 
-Context resolvers scope jobs to a workspace. Most commands accept `--here` to scope `.` resolution to the current context instead of globally. Commands that spawn jobs (`retry`, `seq run`) also accept `--cwd` to run in the current directory instead of the original. See `contrib/` for resolver examples.
+Context resolvers scope jobs to a workspace. Most commands accept `--here` to scope `.` resolution to the current context instead of globally. `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 
 ### Sequences
 

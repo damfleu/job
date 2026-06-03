@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -112,6 +113,21 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 		}
 	}
 	return nil
+}
+
+// addCwdFlag registers --cwd onto cmd, writing into v.
+func addCwdFlag(cmd *cobra.Command, v *string, usage string) {
+	cmd.Flags().StringVar(v, "cwd", "", usage)
+	cmd.Flags().Lookup("cwd").NoOptDefVal = "."
+}
+
+// resolveCwdFlag resolves a --cwd flag value to an absolute path. Returns ""
+// when the flag was not set.
+func resolveCwdFlag(val string) (string, error) {
+	if val == "" {
+		return "", nil
+	}
+	return filepath.Abs(val)
 }
 
 // addRunFlags registers the shared job-launch flags onto cmd, writing into f.

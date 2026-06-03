@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -28,14 +27,10 @@ var retryCmd = &cobra.Command{
 		}
 		workDir := j.WorkDir
 		if retryCwd != "" {
-			if retryCwd == "." {
-				workDir = ""
-			} else {
-				abs, err := filepath.Abs(retryCwd)
-				if err != nil {
-					return fmt.Errorf("resolving --cwd: %w", err)
-				}
-				workDir = abs
+			var err error
+			workDir, err = resolveCwdFlag(retryCwd)
+			if err != nil {
+				return fmt.Errorf("resolving --cwd: %w", err)
 			}
 		}
 		return launchJob(j.Command, workDir, retryFlags)
@@ -45,7 +40,6 @@ var retryCmd = &cobra.Command{
 func init() {
 	addRunFlags(retryCmd, &retryFlags)
 	addHereFlag(retryCmd)
-	retryCmd.Flags().StringVar(&retryCwd, "cwd", "", "run in a directory instead of the original")
-	retryCmd.Flags().Lookup("cwd").NoOptDefVal = "."
+	addCwdFlag(retryCmd, &retryCwd, "run in a directory instead of the original")
 	rootCmd.AddCommand(retryCmd)
 }

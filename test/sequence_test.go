@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -190,6 +191,58 @@ func TestRmRefusesJobInSequence(t *testing.T) {
 	h.run("sequence", "rm", "rm-seq")
 	r = h.run("remove", keyA)
 	assert.Equal(t, 0, r.exitCode)
+}
+
+func TestSequenceRunCwd(t *testing.T) {
+	h := newHarness(t)
+
+	origDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	keyA := runFg(h, "echo", "step-a")
+	h.runFrom(origDir, "run", "-v", "-f", "-A", keyA, "echo", "step-b")
+	keyB := h.lastJob().Key
+	h.run("sequence", "save", "cwd-seq", keyB)
+
+	cwdDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	r := h.runFrom(cwdDir, "sequence", "run", "--cwd", "cwd-seq")
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 2)
+	for _, line := range lines {
+		newKey := strings.Fields(line)[0]
+		h.waitFor(newKey, model.StatusCompleted)
+		j, err := h.db.Get(newKey)
+		require.NoError(t, err)
+		assert.Equal(t, cwdDir, j.WorkDir)
+	}
+}
+
+func TestSequenceRunCwdExplicit(t *testing.T) {
+	h := newHarness(t)
+
+	origDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	keyA := runFg(h, "echo", "step-a")
+	h.runFrom(origDir, "run", "-v", "-f", "-A", keyA, "echo", "step-b")
+	keyB := h.lastJob().Key
+	h.run("sequence", "save", "cwd-explicit-seq", keyB)
+
+	explicitDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	r := h.run("sequence", "run", "--cwd="+explicitDir, "cwd-explicit-seq")
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 2)
+	for _, line := range lines {
+		newKey := strings.Fields(line)[0]
+		h.waitFor(newKey, model.StatusCompleted)
+		j, err := h.db.Get(newKey)
+		require.NoError(t, err)
+		assert.Equal(t, explicitDir, j.WorkDir)
+	}
 }
 
 func TestSequenceDiamondDependency(t *testing.T) {

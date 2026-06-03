@@ -120,6 +120,48 @@ func TestRetryWithDep(t *testing.T) {
 	h.waitFor(retryKey, model.StatusCompleted)
 }
 
+func TestRetryCwd(t *testing.T) {
+	h := newHarness(t)
+	origDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+
+	h.runFrom(origDir, "run", "-f", "echo", "original")
+	orig := h.lastJob()
+
+	otherDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+
+	r := h.runFrom(otherDir, "retry", "-v", "--cwd", orig.Key)
+	retryKey := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, retryKey)
+	h.waitFor(retryKey, model.StatusCompleted)
+
+	retried, err := h.db.Get(retryKey)
+	require.NoError(t, err)
+	assert.Equal(t, otherDir, retried.WorkDir)
+}
+
+func TestRetryCwdExplicit(t *testing.T) {
+	h := newHarness(t)
+	origDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+
+	h.runFrom(origDir, "run", "-f", "echo", "original")
+	orig := h.lastJob()
+
+	explicitDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+
+	r := h.run("retry", "-v", "--cwd="+explicitDir, orig.Key)
+	retryKey := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, retryKey)
+	h.waitFor(retryKey, model.StatusCompleted)
+
+	retried, err := h.db.Get(retryKey)
+	require.NoError(t, err)
+	assert.Equal(t, explicitDir, retried.WorkDir)
+}
+
 func TestRetryRequiresCompleted(t *testing.T) {
 	h := newHarness(t)
 

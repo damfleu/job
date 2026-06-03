@@ -2,6 +2,7 @@ package integration
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -152,6 +153,17 @@ func TestAutomatedJobDoesNotUpdateDot(t *testing.T) {
 	r = h.run("show", ".")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, humanKey)
+}
+
+func TestRunCwd(t *testing.T) {
+	h := newHarness(t)
+
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+
+	h.run("run", "-f", "--cwd="+dir, "echo", "in-dir")
+	j := h.lastJob()
+	assert.Equal(t, dir, j.WorkDir)
 }
 
 func TestSequenceRunDoesNotUpdateDot(t *testing.T) {
