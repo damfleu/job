@@ -245,6 +245,52 @@ func TestSequenceRunCwdExplicit(t *testing.T) {
 	}
 }
 
+func TestSequenceSaveMultipleRoots(t *testing.T) {
+	h := newHarness(t)
+
+	// A → B
+	// A → C   (B and C are both leaves; no shared successor)
+	keyA := runFg(h, "echo", "a")
+
+	h.run("run", "-v", "-A", keyA, "echo", "b")
+	keyB := h.lastJob().Key
+
+	h.run("run", "-v", "-A", keyA, "echo", "c")
+	keyC := h.lastJob().Key
+
+	r := h.run("sequence", "save", "multi-root", keyB, keyC)
+	assert.Equal(t, 0, r.exitCode)
+
+	seq, err := h.db.GetSequence("multi-root")
+	require.NoError(t, err)
+	require.Len(t, seq.Steps, 3)
+
+	idx := func(key string) int {
+		for i, k := range seq.Steps {
+			if k == key {
+				return i
+			}
+		}
+		t.Fatalf("key %s not found in steps", key)
+		return -1
+	}
+	assert.Less(t, idx(keyA), idx(keyB))
+	assert.Less(t, idx(keyA), idx(keyC))
+
+	r = h.run("sequence", "run", "multi-root")
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 3)
+	for _, line := range lines {
+		newKey := strings.Fields(line)[0]
+		h.waitFor(newKey, model.StatusCompleted)
+		j, err := h.db.Get(newKey)
+		require.NoError(t, err)
+		assert.Equal(t, model.ReasonExited, j.Reason)
+	}
+}
+
 func TestSequenceDiamondDependency(t *testing.T) {
 	h := newHarness(t)
 

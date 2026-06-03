@@ -25,15 +25,15 @@ var seqCmd = &cobra.Command{
 }
 
 var seqSaveCmd = &cobra.Command{
-	Use:   "save <name> [key]",
-	Short: "Save a job and its deps as a named sequence",
-	Args:  cobra.RangeArgs(1, 2),
+	Use:   "save <name> [key...]",
+	Short: "Save jobs and their deps as a named sequence",
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resolveHereCtx()
 		name := args[0]
-		key := "."
-		if len(args) > 1 {
-			key = args[1]
+		keys := args[1:]
+		if len(keys) == 0 {
+			keys = []string{"."}
 		}
 		existing, err := globalDB.GetSequence(name)
 		if err != nil && !errors.Is(err, db.ErrSequenceNotFound) {
@@ -43,11 +43,15 @@ var seqSaveCmd = &cobra.Command{
 			last := existing.Steps[len(existing.Steps)-1]
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: replacing existing sequence %q (was: %s)\n", name, last)
 		}
-		j, err := core.ResolveKey(globalDB, key, hereCtx)
-		if err != nil {
-			return err
+		jobs := make([]*model.Job, len(keys))
+		for i, key := range keys {
+			j, err := core.ResolveKey(globalDB, key, hereCtx)
+			if err != nil {
+				return err
+			}
+			jobs[i] = j
 		}
-		if err := core.SaveSequence(globalDB, name, j); err != nil {
+		if err := core.SaveSequence(globalDB, name, jobs); err != nil {
 			return err
 		}
 		seq, err := globalDB.GetSequence(name)

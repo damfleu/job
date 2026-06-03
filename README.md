@@ -84,7 +84,7 @@ Context resolvers scope jobs to a workspace. Most commands accept `--here` to sc
 
 ### Sequences
 
-Sequences capture a job and all its upstream dependencies as a replayable workflow:
+Sequences capture one or more jobs and their combined upstream dependencies as a replayable workflow:
 
 ```sh
 job run -- make build
@@ -100,6 +100,12 @@ job seq run deploy
 ```
 
 Each replay spawns fresh jobs while preserving the original dependency structure.
+
+Pass multiple keys to `save` to capture branches that share dependencies but have no common successor:
+
+```sh
+job sequence save ci keyB keyC
+```
 
 Jobs referenced by a sequence cannot be deleted to preserve the sequence's runnability.
 

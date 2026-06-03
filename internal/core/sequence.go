@@ -9,11 +9,12 @@ import (
 	"job/internal/model"
 )
 
-// SaveSequence walks the transitive dependency graph of job j, topologically sorts the result (deps
-// before dependents), and stores it as a named sequence.
-func SaveSequence(store db.JobStore, name string, j *model.Job) error {
+// SaveSequence walks the transitive dependency graph of all provided jobs, topologically sorts the
+// result (deps before dependents), and stores it as a named sequence.
+func SaveSequence(store db.JobStore, name string, jobs []*model.Job) error {
 	visited := map[string]*model.Job{}
-	queue := []*model.Job{j}
+	queue := make([]*model.Job, len(jobs))
+	copy(queue, jobs)
 
 	for len(queue) > 0 {
 		curr := queue[0]
