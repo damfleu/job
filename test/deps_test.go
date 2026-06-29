@@ -18,10 +18,10 @@ func TestDepAliasResolvesToMostRecentJob(t *testing.T) {
 	h.run("run", "-f", "-k", "shared-key", "echo", "first run")
 
 	// new running job with the same alias
-	h.run("run", "-v", "-k", "shared-key", "sleep", "2")
+	h.run("run", "-k", "shared-key", "sleep", "2")
 
 	// dep should block on the NEW running job, not the old completed one
-	r := h.run("run", "-v", "-a", "shared-key", "echo", "child")
+	r := h.run("run", "-a", "shared-key", "echo", "child")
 	childKey := strings.Fields(r.stderr)[0]
 	require.NotEmpty(t, childKey)
 
@@ -34,11 +34,11 @@ func TestDepAliasResolvesToMostRecentJob(t *testing.T) {
 func TestDepBlocksUntilDepCompletes(t *testing.T) {
 	h := newHarness(t)
 
-	r1 := h.run("run", "-v", "-k", "dep-job", "sleep", "2")
+	r1 := h.run("run", "-k", "dep-job", "sleep", "2")
 	depKey := strings.TrimSpace(r1.stderr)
 	require.NotEmpty(t, depKey)
 
-	r2 := h.run("run", "-v", "-a", "dep-job", "echo", "child")
+	r2 := h.run("run", "-a", "dep-job", "echo", "child")
 	childKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, childKey)
 
@@ -58,11 +58,10 @@ func TestDepBlocksUntilDepCompletes(t *testing.T) {
 func TestDepAfter(t *testing.T) {
 	h := newHarness(t)
 
-	r := h.run("run", "-v", "-f", "echo", "dep job")
-	// stderr has "key running\nkey done\n", extract first word
-	depKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
+	r := h.run("run", "echo", "dep job")
+	depKey := strings.TrimSpace(r.stderr)
 
-	r2 := h.run("run", "-v", "-a", depKey, "echo", "dependent job")
+	r2 := h.run("run", "-a", depKey, "echo", "dependent job")
 	childKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, childKey)
 
@@ -79,10 +78,10 @@ func TestDepAfter(t *testing.T) {
 func TestDepAfterSuccessFails(t *testing.T) {
 	h := newHarness(t)
 
-	r := h.run("run", "-v", "-f", "false")
-	depKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
+	r := h.run("run", "false")
+	depKey := strings.TrimSpace(r.stderr)
 
-	r2 := h.run("run", "-v", "-A", depKey, "echo", "should not run")
+	r2 := h.run("run", "-A", depKey, "echo", "should not run")
 	childKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, childKey)
 
@@ -98,12 +97,12 @@ func TestDepAfterSuccessFails(t *testing.T) {
 func TestStopBlockedJobDoesNotRunAfterDepCompletes(t *testing.T) {
 	h := newHarness(t)
 
-	r1 := h.run("run", "-v", "sleep", "2")
+	r1 := h.run("run", "sleep", "2")
 	depKey := strings.TrimSpace(r1.stderr)
 	require.NotEmpty(t, depKey)
 	h.waitFor(depKey, model.StatusRunning)
 
-	r2 := h.run("run", "-v", "-A", depKey, "echo", "should not run")
+	r2 := h.run("run", "-A", depKey, "echo", "should not run")
 	blockedKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, blockedKey)
 	h.waitFor(blockedKey, model.StatusBlocked)
@@ -125,17 +124,17 @@ func TestStopBlockedJobDoesNotRunAfterDepCompletes(t *testing.T) {
 func TestDepMixedOrder(t *testing.T) {
 	h := newHarness(t)
 
-	r1 := h.run("run", "-v", "-f", "echo", "dep-a")
-	keyA := strings.Fields(strings.TrimSpace(r1.stderr))[0]
+	r1 := h.run("run", "echo", "dep-a")
+	keyA := strings.TrimSpace(r1.stderr)
 
-	r2 := h.run("run", "-v", "-f", "echo", "dep-b")
-	keyB := strings.Fields(strings.TrimSpace(r2.stderr))[0]
+	r2 := h.run("run", "echo", "dep-b")
+	keyB := strings.TrimSpace(r2.stderr)
 
-	r3 := h.run("run", "-v", "-f", "echo", "dep-c")
-	keyC := strings.Fields(strings.TrimSpace(r3.stderr))[0]
+	r3 := h.run("run", "echo", "dep-c")
+	keyC := strings.TrimSpace(r3.stderr)
 
 	// interleaved: -A, -a, -A — order must be preserved
-	r4 := h.run("run", "-v", "-A", keyA, "-a", keyB, "-A", keyC, "echo", "child")
+	r4 := h.run("run", "-A", keyA, "-a", keyB, "-A", keyC, "echo", "child")
 	childKey := strings.Fields(r4.stderr)[0]
 	require.NotEmpty(t, childKey)
 

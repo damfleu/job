@@ -12,18 +12,18 @@ import (
 	"job/internal/model"
 )
 
-// runFg runs a foreground job and returns its key.
+// runFg runs a job and returns its key.
 func runFg(h *harness, args ...string) string {
 	h.t.Helper()
-	r := h.run(append([]string{"run", "-v", "-f"}, args...)...)
-	return strings.Fields(strings.TrimSpace(r.stderr))[0]
+	r := h.run(append([]string{"run"}, args...)...)
+	return strings.TrimSpace(r.stderr)
 }
 
 func TestSequenceSaveAndList(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "echo", "step-a")
-	h.run("run", "-v", "-A", keyA, "echo", "step-b")
+	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 
 	r := h.run("sequence", "save", "my-seq", keyB)
@@ -62,7 +62,7 @@ func TestSequenceShow(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "echo", "step-a")
-	h.run("run", "-v", "-A", keyA, "echo", "step-b")
+	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 
 	h.run("sequence", "save", "show-seq", keyB)
@@ -81,7 +81,7 @@ func TestSequenceRun(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "echo", "step-a")
-	h.run("run", "-v", "-A", keyA, "echo", "step-b")
+	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 
 	h.run("sequence", "save", "run-seq", keyB)
@@ -119,7 +119,7 @@ func TestSequenceRunAfterSuccessPropagatesFailure(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "false")
-	h.run("run", "-v", "-A", keyA, "echo", "should-not-run")
+	h.run("run", "-A", keyA, "echo", "should-not-run")
 	keyB := h.lastJob().Key
 
 	h.run("sequence", "save", "fail-seq", keyB)
@@ -156,6 +156,8 @@ func TestPruneSkipsJobsInSequence(t *testing.T) {
 	// keyA is the job to protect; keyB is used as the prune cutoff.
 	keyA := runFg(h, "echo", "step-a")
 	keyB := runFg(h, "echo", "cutoff")
+	h.waitFor(keyA, model.StatusCompleted)
+	h.waitFor(keyB, model.StatusCompleted)
 
 	h.run("sequence", "save", "prune-seq", keyA)
 
@@ -199,7 +201,7 @@ func TestSequenceRunCwd(t *testing.T) {
 	origDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
 	keyA := runFg(h, "echo", "step-a")
-	h.runFrom(origDir, "run", "-v", "-f", "-A", keyA, "echo", "step-b")
+	h.runFrom(origDir, "run", "-f", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 	h.run("sequence", "save", "cwd-seq", keyB)
 
@@ -225,7 +227,7 @@ func TestSequenceRunCwdExplicit(t *testing.T) {
 	origDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
 	keyA := runFg(h, "echo", "step-a")
-	h.runFrom(origDir, "run", "-v", "-f", "-A", keyA, "echo", "step-b")
+	h.runFrom(origDir, "run", "-f", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 	h.run("sequence", "save", "cwd-explicit-seq", keyB)
 
@@ -252,10 +254,10 @@ func TestSequenceSaveMultipleRoots(t *testing.T) {
 	// A → C   (B and C are both leaves; no shared successor)
 	keyA := runFg(h, "echo", "a")
 
-	h.run("run", "-v", "-A", keyA, "echo", "b")
+	h.run("run", "-A", keyA, "echo", "b")
 	keyB := h.lastJob().Key
 
-	h.run("run", "-v", "-A", keyA, "echo", "c")
+	h.run("run", "-A", keyA, "echo", "c")
 	keyC := h.lastJob().Key
 
 	r := h.run("sequence", "save", "multi-root", keyB, keyC)
@@ -301,13 +303,13 @@ func TestSequenceDiamondDependency(t *testing.T) {
 	//      D
 	keyA := runFg(h, "echo", "a")
 
-	h.run("run", "-v", "-A", keyA, "echo", "b")
+	h.run("run", "-A", keyA, "echo", "b")
 	keyB := h.lastJob().Key
 
-	h.run("run", "-v", "-A", keyA, "echo", "c")
+	h.run("run", "-A", keyA, "echo", "c")
 	keyC := h.lastJob().Key
 
-	h.run("run", "-v", "-A", keyB, "-A", keyC, "echo", "d")
+	h.run("run", "-A", keyB, "-A", keyC, "echo", "d")
 	keyD := h.lastJob().Key
 
 	h.run("sequence", "save", "diamond", keyD)

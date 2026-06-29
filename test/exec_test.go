@@ -41,7 +41,7 @@ func TestForegroundJobNonZeroExit(t *testing.T) {
 
 func TestBackgroundJob(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("run", "-v", "echo", "bg hello")
+	r := h.run("run", "echo", "bg hello")
 	assert.Equal(t, 0, r.exitCode)
 	key := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, key)
@@ -59,9 +59,14 @@ func TestBackgroundJob(t *testing.T) {
 	assert.Contains(t, string(content), "bg hello")
 }
 
-func TestVerboseFlag(t *testing.T) {
+func TestQuietFlag(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("run", "-v", "-f", "echo", "verbose")
-	assert.Contains(t, r.stderr, "running")
-	assert.Contains(t, r.stderr, "done")
+	r := h.run("run", "-q", "echo", "quiet")
+	assert.Empty(t, r.stderr)
+}
+
+func TestDefaultPrintsKey(t *testing.T) {
+	h := newHarness(t)
+	r := h.run("run", "echo", "hello")
+	assert.NotEmpty(t, r.stderr)
 }

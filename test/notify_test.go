@@ -61,7 +61,7 @@ func TestNotifyForegroundNonZeroExit(t *testing.T) {
 func TestNotifyBackground(t *testing.T) {
 	h, outFile := setupNotifier(t)
 
-	r := h.run("run", "-v", "-n", "echo", "bg notify")
+	r := h.run("run", "-n", "echo", "bg notify")
 	key := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, key)
 	h.waitFor(key, model.StatusCompleted)

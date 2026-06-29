@@ -19,7 +19,7 @@ type RunFlags struct {
 	Foreground bool
 	Watch      bool
 	Notify     bool
-	Verbose    bool
+	Quiet      bool
 	Alias      string
 	Deps       []model.Dep // accumulates -a/-A in declaration order
 	Automated  bool
@@ -61,7 +61,6 @@ func buildRunOptions(command []string, workDir string, f RunFlags) (core.RunOpti
 	}
 	return core.RunOptions{
 		Alias:     f.Alias,
-		Verbose:   f.Verbose,
 		Deps:      deps,
 		WorkDir:   workDir,
 		Notifiers: notifiers,
@@ -105,7 +104,7 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 		}
 		return nil
 	}
-	if f.Verbose {
+	if !f.Quiet {
 		if len(opts.Deps) > 0 {
 			fmt.Fprintf(os.Stderr, "%s (%s)\n", key, model.FormatDeps(opts.Deps))
 		} else {
@@ -135,12 +134,13 @@ func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	cmd.Flags().BoolVarP(&f.Foreground, "foreground", "f", false, "run in foreground")
 	cmd.Flags().BoolVarP(&f.Watch, "watch", "w", false, "run in background and tail log")
 	cmd.Flags().BoolVarP(&f.Notify, "notify", "n", false, "notify on completion")
-	cmd.Flags().BoolVarP(&f.Verbose, "verbose", "v", false, "print job key")
+	cmd.Flags().BoolVarP(&f.Quiet, "quiet", "q", false, "suppress job key output")
 	cmd.Flags().StringVarP(&f.Alias, "key", "k", "", "explicit job key/alias")
 	cmd.Flags().VarP(depFlag{model.DepAfter, &f.Deps}, "after", "a", "run after job completes (any exit code)")
 	cmd.Flags().VarP(depFlag{model.DepAfterSuccess, &f.Deps}, "after-success", "A", "run only if job succeeds (exit 0)")
 	cmd.Flags().BoolVar(&f.Automated, "automated", false, "mark job as automated (not human-initiated); skips '.' tracking")
 	cmd.MarkFlagsMutuallyExclusive("foreground", "watch")
+	cmd.MarkFlagsMutuallyExclusive("foreground", "quiet")
 }
 
 // watchJob tails logFile to stdout, polling the DB until the job completes.

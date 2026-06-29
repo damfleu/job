@@ -19,7 +19,7 @@ func TestRetryBasic(t *testing.T) {
 	orig := h.lastJob()
 	require.Equal(t, model.StatusCompleted, orig.Status)
 
-	r := h.run("retry", "-v", orig.Key)
+	r := h.run("retry", orig.Key)
 	assert.Equal(t, 0, r.exitCode)
 	retryKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, retryKey)
@@ -47,7 +47,7 @@ func TestRetryPreservesWorkDir(t *testing.T) {
 
 	// retry from a different directory — workdir should match original
 	otherDir := t.TempDir()
-	r := h.runFrom(otherDir, "retry", "-v", orig.Key)
+	r := h.runFrom(otherDir, "retry", orig.Key)
 	retryKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, retryKey)
 
@@ -103,11 +103,11 @@ func TestRetryWithDep(t *testing.T) {
 	h.run("run", "-f", "echo", "original")
 	orig := h.lastJob()
 
-	r := h.run("run", "-v", "sleep", "5")
+	r := h.run("run", "sleep", "5")
 	depKey := strings.TrimSpace(r.stderr)
 	h.waitFor(depKey, model.StatusRunning)
 
-	r2 := h.run("retry", "-v", "-a", depKey, orig.Key)
+	r2 := h.run("retry", "-a", depKey, orig.Key)
 	retryKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, retryKey)
 
@@ -131,7 +131,7 @@ func TestRetryCwd(t *testing.T) {
 	otherDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
 
-	r := h.runFrom(otherDir, "retry", "-v", "--cwd", orig.Key)
+	r := h.runFrom(otherDir, "retry", "--cwd", orig.Key)
 	retryKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, retryKey)
 	h.waitFor(retryKey, model.StatusCompleted)
@@ -152,7 +152,7 @@ func TestRetryCwdExplicit(t *testing.T) {
 	explicitDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
 
-	r := h.run("retry", "-v", "--cwd="+explicitDir, orig.Key)
+	r := h.run("retry", "--cwd="+explicitDir, orig.Key)
 	retryKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, retryKey)
 	h.waitFor(retryKey, model.StatusCompleted)
@@ -165,7 +165,7 @@ func TestRetryCwdExplicit(t *testing.T) {
 func TestRetryRequiresCompleted(t *testing.T) {
 	h := newHarness(t)
 
-	r := h.run("run", "-v", "sleep", "5")
+	r := h.run("run", "sleep", "5")
 	key := strings.TrimSpace(r.stderr)
 	h.waitFor(key, model.StatusRunning)
 

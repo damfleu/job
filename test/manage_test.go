@@ -15,7 +15,7 @@ import (
 
 func TestJobStop(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("run", "-v", "sleep", "60")
+	r := h.run("run", "sleep", "60")
 	key := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, key)
 
@@ -108,12 +108,12 @@ func TestPruneRequiresFlag(t *testing.T) {
 func TestStopBlockedJobShowsRunningDep(t *testing.T) {
 	h := newHarness(t)
 
-	r1 := h.run("run", "-v", "sleep", "60")
+	r1 := h.run("run", "sleep", "60")
 	depKey := strings.TrimSpace(r1.stderr)
 	require.NotEmpty(t, depKey)
 	h.waitFor(depKey, model.StatusRunning)
 
-	r2 := h.run("run", "-v", "-A", depKey, "echo", "queued")
+	r2 := h.run("run", "-A", depKey, "echo", "queued")
 	blockedKey := strings.Fields(r2.stderr)[0]
 	require.NotEmpty(t, blockedKey)
 	h.waitFor(blockedKey, model.StatusBlocked)
@@ -140,8 +140,8 @@ func TestAutomatedJobDoesNotUpdateDot(t *testing.T) {
 	humanKey := runFg(h, "echo", "human job")
 
 	// Automated job — capture key from stderr, should not steal "."
-	r := h.run("run", "-v", "-f", "--automated", "echo", "automated job")
-	automatedKey := strings.Fields(strings.TrimSpace(r.stderr))[0]
+	r := h.run("run", "--automated", "echo", "automated job")
+	automatedKey := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, automatedKey)
 
 	// Verify the automated flag is stored.

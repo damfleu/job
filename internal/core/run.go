@@ -19,7 +19,6 @@ import (
 // RunOptions configures job creation.
 type RunOptions struct {
 	Alias     string
-	Verbose   bool
 	Deps      []model.Dep
 	WorkDir   string   // if empty, defaults to os.Getwd()
 	Notifiers []string // programs to call on completion
@@ -107,14 +106,6 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		return 0, err
 	}
 
-	if opts.Verbose {
-		if len(opts.Deps) > 0 {
-			fmt.Fprintf(os.Stderr, "%s running (%s)\n", key, model.FormatDeps(opts.Deps))
-		} else {
-			fmt.Fprintf(os.Stderr, "%s running\n", key)
-		}
-	}
-
 	exitCode, runErr := runForeground(command, workDir, lf)
 
 	j.Status = model.StatusCompleted
@@ -130,10 +121,6 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 	}
 
 	notify.Fire(opts.Notifiers, j)
-
-	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "%s done (exit %d)\n", key, exitCode)
-	}
 
 	if runErr != nil {
 		return exitCode, nil // non-zero exit is expected, not an infra error
