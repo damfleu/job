@@ -293,6 +293,100 @@ func TestSequenceSaveMultipleRoots(t *testing.T) {
 	}
 }
 
+func TestSequenceRunAfterSuccess(t *testing.T) {
+	h := newHarness(t)
+
+	// Build and save a simple two-step sequence.
+	keyA := runFg(h, "echo", "step-a")
+	h.run("run", "-A", keyA, "echo", "step-b")
+	keyB := h.lastJob().Key
+	h.run("sequence", "save", "after-seq", keyB)
+
+	// gate is the external job the sequence must wait for.
+	gate := runFg(h, "echo", "gate")
+	h.waitFor(gate, model.StatusCompleted)
+
+	r := h.run("sequence", "run", "-A", gate, "after-seq")
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 2)
+	newKeyA := strings.Fields(lines[0])[0]
+	newKeyB := strings.Fields(lines[1])[0]
+
+	h.waitFor(newKeyA, model.StatusCompleted)
+	h.waitFor(newKeyB, model.StatusCompleted)
+
+	// Root step must depend on the gate.
+	jA, err := h.db.Get(newKeyA)
+	require.NoError(t, err)
+	require.Len(t, jA.Deps, 1)
+	assert.Equal(t, gate, jA.Deps[0].Key)
+	assert.Equal(t, model.DepAfterSuccess, jA.Deps[0].Kind)
+
+	// Second step depends only on the new root, not the gate.
+	jB, err := h.db.Get(newKeyB)
+	require.NoError(t, err)
+	require.Len(t, jB.Deps, 1)
+	assert.Equal(t, newKeyA, jB.Deps[0].Key)
+}
+
+func TestSequenceRunAfter(t *testing.T) {
+	h := newHarness(t)
+
+	keyA := runFg(h, "echo", "step-a")
+	h.run("sequence", "save", "after-any-seq", keyA)
+
+	gate := runFg(h, "false") // exits non-zero
+	h.waitFor(gate, model.StatusCompleted)
+
+	r := h.run("sequence", "run", "-a", gate, "after-any-seq")
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 1)
+	newKey := strings.Fields(lines[0])[0]
+
+	h.waitFor(newKey, model.StatusCompleted)
+
+	j, err := h.db.Get(newKey)
+	require.NoError(t, err)
+	// -a runs regardless of gate exit code, so the step must have run normally.
+	assert.Equal(t, model.ReasonExited, j.Reason)
+	require.Len(t, j.Deps, 1)
+	assert.Equal(t, gate, j.Deps[0].Key)
+	assert.Equal(t, model.DepAfter, j.Deps[0].Kind)
+}
+
+func TestSequenceRunAfterSuccessMultipleRoots(t *testing.T) {
+	h := newHarness(t)
+
+	// Two independent root steps, both should be gated.
+	keyA := runFg(h, "echo", "a")
+	keyB := runFg(h, "echo", "b")
+	h.run("sequence", "save", "multi-after-seq", keyA, keyB)
+
+	gate := runFg(h, "echo", "gate")
+	h.waitFor(gate, model.StatusCompleted)
+
+	r := h.run("sequence", "run", "-A", gate, "multi-after-seq")
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 2)
+
+	for _, line := range lines {
+		newKey := strings.Fields(line)[0]
+		h.waitFor(newKey, model.StatusCompleted)
+		j, err := h.db.Get(newKey)
+		require.NoError(t, err)
+		assert.Equal(t, model.ReasonExited, j.Reason)
+		require.Len(t, j.Deps, 1)
+		assert.Equal(t, gate, j.Deps[0].Key)
+		assert.Equal(t, model.DepAfterSuccess, j.Deps[0].Kind)
+	}
+}
+
 func TestSequenceDiamondDependency(t *testing.T) {
 	h := newHarness(t)
 

@@ -68,6 +68,7 @@ var seqSaveCmd = &cobra.Command{
 
 var seqRunCwd string
 var seqRunNotify bool
+var seqRunDeps []model.Dep
 
 var seqRunCmd = &cobra.Command{
 	Use:   "run <name>",
@@ -92,9 +93,14 @@ var seqRunCmd = &cobra.Command{
 		origToNew := make(map[string]string, len(steps))
 
 		for i, step := range steps {
+			deps := remapDeps(step.Deps, origToNew)
+			// Prepend external deps to root steps (those with no intra-sequence deps).
+			if len(deps) == 0 {
+				deps = append(seqRunDeps[:len(seqRunDeps):len(seqRunDeps)], deps...)
+			}
 			opts, err := buildRunOptions(step.Command, step.WorkDir, RunFlags{
 				Notify:    seqRunNotify,
-				Deps:      remapDeps(step.Deps, origToNew),
+				Deps:      deps,
 				Automated: true,
 			})
 			if err != nil {
@@ -183,6 +189,8 @@ func init() {
 	addHereFlag(seqSaveCmd)
 	addCwdFlag(seqRunCmd, &seqRunCwd, "run steps in a directory instead of their original directories")
 	seqRunCmd.Flags().BoolVarP(&seqRunNotify, "notify", "n", false, "notify on completion of each step")
+	seqRunCmd.Flags().VarP(depFlag{model.DepAfter, &seqRunDeps}, "after", "a", "run sequence after job completes (any exit code)")
+	seqRunCmd.Flags().VarP(depFlag{model.DepAfterSuccess, &seqRunDeps}, "after-success", "A", "run sequence only if job succeeds (exit 0)")
 	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd, seqRmCmd)
 	rootCmd.AddCommand(seqCmd)
 }
