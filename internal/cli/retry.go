@@ -5,7 +5,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"job/internal/core"
 	"job/internal/model"
 )
 
@@ -17,8 +16,7 @@ var retryCmd = &cobra.Command{
 	Short: "Re-run a completed job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resolveHereCtx()
-		j, err := core.ResolveKey(globalDB, keyArg(args), hereCtx)
+		j, err := resolveJobArg(cmd, args)
 		if err != nil {
 			return err
 		}

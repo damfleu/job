@@ -98,6 +98,13 @@ func keyArg(args []string) string {
 	return "."
 }
 
+// resolveJobArg resolves the job referenced by args (or "." by default),
+// honouring --here scoping. Shared by every command that acts on one existing job.
+func resolveJobArg(cmd *cobra.Command, args []string) (*model.Job, error) {
+	resolveHereCtx()
+	return core.ResolveKey(globalDB, keyArg(args), hereCtx)
+}
+
 func configDir() string {
 	if dir := os.Getenv("JOB_CONFIG_DIR"); dir != "" {
 		return dir
