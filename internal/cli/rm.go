@@ -47,5 +47,6 @@ func printDeleted(cmd *cobra.Command, key, logFile string) {
 
 func init() {
 	addHereFlag(rmCmd)
+	addSelectFlag(rmCmd)
 	rootCmd.AddCommand(rmCmd)
 }

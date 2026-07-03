@@ -36,6 +36,14 @@ func resolveHereCtx() {
 	}
 }
 
+var selectInteractive bool
+
+// addSelectFlag registers -i/--select on cmd, writing into the shared selectInteractive global.
+func addSelectFlag(cmd *cobra.Command) {
+	cmd.Flags().BoolVarP(&selectInteractive, "select", "i", false,
+		"interactively pick when a key resolves to more than one job")
+}
+
 var rootCmd = &cobra.Command{
 	Use:           "job",
 	Short:         "Run and track jobs",
@@ -102,7 +110,11 @@ func keyArg(args []string) string {
 // honouring --here scoping. Shared by every command that acts on one existing job.
 func resolveJobArg(cmd *cobra.Command, args []string) (*model.Job, error) {
 	resolveHereCtx()
-	return core.ResolveKey(globalDB, keyArg(args), hereCtx)
+	input := keyArg(args)
+	if !selectInteractive {
+		return core.ResolveKey(globalDB, input, hereCtx)
+	}
+	return resolveJobArgInteractive(input, hereCtx)
 }
 
 func configDir() string {

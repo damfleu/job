@@ -43,5 +43,6 @@ var stopCmd = &cobra.Command{
 
 func init() {
 	addHereFlag(stopCmd)
+	addSelectFlag(stopCmd)
 	rootCmd.AddCommand(stopCmd)
 }

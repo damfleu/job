@@ -38,6 +38,7 @@ var retryCmd = &cobra.Command{
 func init() {
 	addRunFlags(retryCmd, &retryFlags)
 	addHereFlag(retryCmd)
+	addSelectFlag(retryCmd)
 	addCwdFlag(retryCmd, &retryCwd, "run in a directory instead of the original")
 	rootCmd.AddCommand(retryCmd)
 }

@@ -26,6 +26,7 @@ var showCmd = &cobra.Command{
 
 func init() {
 	addHereFlag(showCmd)
+	addSelectFlag(showCmd)
 	rootCmd.AddCommand(showCmd)
 }
 
