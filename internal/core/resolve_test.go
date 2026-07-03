@@ -36,12 +36,16 @@ func (f *fakeStore) FindByAlias(alias string) (*model.Job, error) {
 	return nil, db.ErrNotFound
 }
 
-func (f *fakeStore) Search(query string) ([]*model.Job, error) {
+func (f *fakeStore) Search(query, context string) ([]*model.Job, error) {
 	var out []*model.Job
 	for _, j := range f.jobs {
-		if strings.Contains(strings.Join(j.Command, " "), query) {
-			out = append(out, j)
+		if !strings.Contains(strings.Join(j.Command, " "), query) {
+			continue
 		}
+		if context != "" && j.Context != context {
+			continue
+		}
+		out = append(out, j)
 	}
 	return out, nil
 }
@@ -108,6 +112,18 @@ func TestResolveCommandSubstring(t *testing.T) {
 	j, err := ResolveKey(store, "go test", "")
 	require.NoError(t, err)
 	assert.Equal(t, "key2", j.Key)
+}
+
+func TestResolveCommandSubstringScopedToContext(t *testing.T) {
+	projectA := job("key1", "", []string{"make", "build"}, model.StatusRunning)
+	projectA.Context = "projectA"
+	projectB := job("key2", "", []string{"make", "build"}, model.StatusRunning)
+	projectB.Context = "projectB"
+	store := &fakeStore{jobs: []*model.Job{projectA, projectB}}
+
+	j, err := ResolveKey(store, "make", "projectA")
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
 }
 
 func TestResolveCommandSubstringPrefersActive(t *testing.T) {

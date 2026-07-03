@@ -11,7 +11,7 @@ import (
 // ResolveKey maps a user-supplied input to a job, using these strategies in order:
 //  1. "." means the most recently started job (scoped to ctx when non-empty)
 //  2. Exact match on key or alias
-//  3. Substring match on command (active jobs preferred over completed)
+//  3. Substring match on command, scoped to ctx when non-empty (active jobs preferred over completed)
 //  4. Prefix match on key
 func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	if input == "." {
@@ -40,7 +40,7 @@ func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	}
 
 	// substring on command and prefer active jobs
-	matches, err := store.Search(input)
+	matches, err := store.Search(input, ctx)
 	if err != nil {
 		return nil, err
 	}

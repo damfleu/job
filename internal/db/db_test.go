@@ -241,12 +241,12 @@ func TestSearch(t *testing.T) {
 	require.NoError(t, db.Insert(j1))
 	require.NoError(t, db.Insert(j2))
 
-	results, err := db.Search("make")
+	results, err := db.Search("make", "")
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, "k1", results[0].Key)
 
-	all, err := db.Search("go")
+	all, err := db.Search("go", "")
 	require.NoError(t, err)
 	assert.Len(t, all, 1)
 }
@@ -261,11 +261,29 @@ func TestSearchLimit(t *testing.T) {
 		require.NoError(t, db.Insert(j))
 	}
 
-	results, err := db.Search("make")
+	results, err := db.Search("make", "")
 	require.NoError(t, err)
 	require.Len(t, results, searchLimit)
 	// most recently created first
 	assert.Equal(t, fmt.Sprintf("k%d", searchLimit+4), results[0].Key)
+}
+
+func TestSearchContext(t *testing.T) {
+	db := openMemDB(t)
+
+	a := makeJob("a1")
+	a.Command = []string{"make", "build"}
+	a.Context = "projectA"
+	b := makeJob("b1")
+	b.Command = []string{"make", "build"}
+	b.Context = "projectB"
+	require.NoError(t, db.Insert(a))
+	require.NoError(t, db.Insert(b))
+
+	results, err := db.Search("make", "projectA")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "a1", results[0].Key)
 }
 
 func TestSearchEmptyQueryMatchesAll(t *testing.T) {
@@ -279,7 +297,7 @@ func TestSearchEmptyQueryMatchesAll(t *testing.T) {
 	}
 
 	// an empty query is the picker's "no filter, just browse recent jobs" case
-	jobs, err := db.Search("")
+	jobs, err := db.Search("", "")
 	require.NoError(t, err)
 	require.Len(t, jobs, 3)
 	assert.Equal(t, "r3", jobs[0].Key)

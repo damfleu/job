@@ -108,11 +108,16 @@ func (d *DB) GetLastKeyForContext(context string) (string, error) {
 // picker's bare-"." candidate list.
 const searchLimit = 50
 
-func (d *DB) Search(query string) ([]*model.Job, error) {
-	rows, err := d.db.Query(
-		`SELECT `+jobCols+` FROM jobs WHERE command LIKE ? ORDER BY created_at DESC LIMIT ?`,
-		"%"+query+"%", searchLimit,
-	)
+func (d *DB) Search(query, context string) ([]*model.Job, error) {
+	sqlQuery := `SELECT ` + jobCols + ` FROM jobs WHERE command LIKE ?`
+	args := []any{"%" + query + "%"}
+	if context != "" {
+		sqlQuery += ` AND context = ?`
+		args = append(args, context)
+	}
+	sqlQuery += ` ORDER BY created_at DESC LIMIT ?`
+	args = append(args, searchLimit)
+	rows, err := d.db.Query(sqlQuery, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: search: %w", err)
 	}
