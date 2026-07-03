@@ -251,6 +251,42 @@ func TestSearch(t *testing.T) {
 	assert.Len(t, all, 1)
 }
 
+func TestSearchLimit(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	for i := 0; i < searchLimit+5; i++ {
+		j := makeJob(fmt.Sprintf("k%d", i))
+		j.CreatedAt = now.Add(time.Duration(i) * time.Second).Truncate(time.Millisecond)
+		require.NoError(t, db.Insert(j))
+	}
+
+	results, err := db.Search("make")
+	require.NoError(t, err)
+	require.Len(t, results, searchLimit)
+	// most recently created first
+	assert.Equal(t, fmt.Sprintf("k%d", searchLimit+4), results[0].Key)
+}
+
+func TestSearchEmptyQueryMatchesAll(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	for i, key := range []string{"r1", "r2", "r3"} {
+		j := makeJob(key)
+		j.CreatedAt = now.Add(time.Duration(i) * time.Second).Truncate(time.Millisecond)
+		require.NoError(t, db.Insert(j))
+	}
+
+	// an empty query is the picker's "no filter, just browse recent jobs" case
+	jobs, err := db.Search("")
+	require.NoError(t, err)
+	require.Len(t, jobs, 3)
+	assert.Equal(t, "r3", jobs[0].Key)
+	assert.Equal(t, "r2", jobs[1].Key)
+	assert.Equal(t, "r1", jobs[2].Key)
+}
+
 func TestFindByAliasMostRecent(t *testing.T) {
 	db := openMemDB(t)
 

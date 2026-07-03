@@ -103,10 +103,15 @@ func (d *DB) GetLastKeyForContext(context string) (string, error) {
 	return key, nil
 }
 
+// searchLimit caps the number of rows Search returns, most-recently-created first.
+// An empty query matches every job (LIKE "%%"), so this also bounds the
+// picker's bare-"." candidate list.
+const searchLimit = 50
+
 func (d *DB) Search(query string) ([]*model.Job, error) {
 	rows, err := d.db.Query(
-		`SELECT `+jobCols+` FROM jobs WHERE command LIKE ? ORDER BY created_at DESC`,
-		"%"+query+"%",
+		`SELECT `+jobCols+` FROM jobs WHERE command LIKE ? ORDER BY created_at DESC LIMIT ?`,
+		"%"+query+"%", searchLimit,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: search: %w", err)
