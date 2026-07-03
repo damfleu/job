@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,9 +66,24 @@ func TestNotifyBackground(t *testing.T) {
 	key := strings.TrimSpace(r.stderr)
 	require.NotEmpty(t, key)
 	h.waitFor(key, model.StatusCompleted)
-	waitForFile(t, outFile)
 
-	p := readPayload(t, outFile)
+	// The notifier script's output file is created (truncated) as soon as the
+	// shell starts, before the payload is fully written, so poll for a
+	// successfully parseable payload rather than mere file existence.
+	var p notify.Payload
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		data, err := os.ReadFile(outFile)
+		if err == nil {
+			if uerr := json.Unmarshal(data, &p); uerr == nil {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("payload in %s did not become readable within 5s", outFile)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	assert.Equal(t, []string{"echo", "bg notify"}, p.Command)
 	require.NotNil(t, p.RC)
 	assert.Equal(t, 0, *p.RC)

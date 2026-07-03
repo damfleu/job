@@ -120,19 +120,6 @@ func (h *harness) waitFor(key string, status model.Status) {
 	h.t.Fatalf("job %s did not reach %s within 5s", key, status)
 }
 
-// waitForFile polls until path exists or the test times out.
-func waitForFile(t *testing.T, path string) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(path); err == nil {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatalf("file %s did not appear within 5s", path)
-}
-
 // lastJob returns the most recently started job from the DB.
 func (h *harness) lastJob() *model.Job {
 	h.t.Helper()
