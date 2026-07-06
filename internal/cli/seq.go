@@ -89,54 +89,14 @@ var seqRunCmd = &cobra.Command{
 			return err
 		}
 
-		newKeys := make([]string, len(steps))
-		origToNew := make(map[string]string, len(steps))
-
-		for i, step := range steps {
-			deps := remapDeps(step.Deps, origToNew)
-			// Prepend external deps to root steps (those with no intra-sequence deps).
-			if len(deps) == 0 {
-				deps = append(seqRunDeps[:len(seqRunDeps):len(seqRunDeps)], deps...)
-			}
-			opts, err := buildRunOptions(step.Command, step.WorkDir, RunFlags{
-				Notify:    seqRunNotify,
-				Deps:      deps,
-				Automated: true,
-			})
-			if err != nil {
-				return err
-			}
-			key, err := core.CreateAndSpawn(globalDB, stateDir(), step.Command, opts)
-			if err != nil {
-				return fmt.Errorf("sequence: spawning step %d: %w", i, err)
-			}
-			origToNew[step.OriginalKey] = key
-			newKeys[i] = key
+		newKeys, err := runSteps(steps, seqRunDeps, seqRunNotify)
+		if err != nil {
+			return fmt.Errorf("sequence: %w", err)
 		}
 
-		// Load each new job to display its command alongside the key.
-		for _, key := range newKeys {
-			j, err := globalDB.Get(key)
-			if err != nil {
-				fmt.Fprintln(cmd.OutOrStdout(), key)
-				continue
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%-36s  %s\n", key, displayCmd(j.Command))
-		}
+		printStepKeys(cmd.OutOrStdout(), newKeys)
 		return nil
 	},
-}
-
-// remapDeps returns a copy of deps with each key substituted using origToNew.
-func remapDeps(deps []model.Dep, origToNew map[string]string) []model.Dep {
-	if len(deps) == 0 {
-		return deps
-	}
-	out := make([]model.Dep, len(deps))
-	for i, dep := range deps {
-		out[i] = model.Dep{Key: origToNew[dep.Key], Kind: dep.Kind}
-	}
-	return out
 }
 
 var seqListCmd = &cobra.Command{

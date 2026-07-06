@@ -114,6 +114,62 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 	return nil
 }
 
+// runSteps spawns each step in order, remapping intra-set deps (via OriginalKey) to the newly
+// assigned keys as they're produced. extraDeps are prepended to any step that has no intra-set
+// deps of its own (i.e. a root of the step set), so external dependencies still apply. Returns
+// the new keys in step order.
+func runSteps(steps []core.SequenceStep, extraDeps []model.Dep, notify bool) ([]string, error) {
+	newKeys := make([]string, len(steps))
+	origToNew := make(map[string]string, len(steps))
+
+	for i, step := range steps {
+		deps := remapDeps(step.Deps, origToNew)
+		if len(deps) == 0 {
+			deps = append(extraDeps[:len(extraDeps):len(extraDeps)], deps...)
+		}
+		opts, err := buildRunOptions(step.Command, step.WorkDir, RunFlags{
+			Notify:    notify,
+			Deps:      deps,
+			Automated: true,
+		})
+		if err != nil {
+			return nil, err
+		}
+		key, err := core.CreateAndSpawn(globalDB, stateDir(), step.Command, opts)
+		if err != nil {
+			return nil, fmt.Errorf("spawning step %d: %w", i, err)
+		}
+		origToNew[step.OriginalKey] = key
+		newKeys[i] = key
+	}
+	return newKeys, nil
+}
+
+// printStepKeys writes each key to w, one per line, alongside its command (looked up via
+// globalDB) for display purposes. Falls back to just the key if the job can't be loaded.
+func printStepKeys(w io.Writer, keys []string) {
+	for _, key := range keys {
+		j, err := globalDB.Get(key)
+		if err != nil {
+			fmt.Fprintln(w, key)
+			continue
+		}
+		fmt.Fprintf(w, "%-36s  %s\n", key, displayCmd(j.Command))
+	}
+}
+
+// remapDeps returns a copy of deps with each key substituted using origToNew.
+func remapDeps(deps []model.Dep, origToNew map[string]string) []model.Dep {
+	if len(deps) == 0 {
+		return deps
+	}
+	out := make([]model.Dep, len(deps))
+	for i, dep := range deps {
+		out[i] = model.Dep{Key: origToNew[dep.Key], Kind: dep.Kind}
+	}
+	return out
+}
+
 // addCwdFlag registers --cwd onto cmd, writing into v.
 func addCwdFlag(cmd *cobra.Command, v *string, usage string) {
 	cmd.Flags().StringVar(v, "cwd", "", usage)
