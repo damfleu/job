@@ -76,6 +76,7 @@ func (f *fakeStore) Delete(key string) error             { return nil }
 func (f *fakeStore) ListActive(filter, context string) ([]*model.Job, error)               { return nil, nil }
 func (f *fakeStore) ListCompleted(limit int, filter, context string) ([]*model.Job, error) { return nil, nil }
 func (f *fakeStore) ListCompletedBefore(t time.Time, context string) ([]*model.Job, error) { return nil, nil }
+func (f *fakeStore) ListDepFailed() ([]*model.Job, error)                                  { return nil, nil }
 func (f *fakeStore) SaveSequence(seq *model.Sequence) error                                { return nil }
 func (f *fakeStore) GetSequence(name string) (*model.Sequence, error)                      { return nil, nil }
 func (f *fakeStore) ListSequences() ([]*model.Sequence, error)                             { return nil, nil }

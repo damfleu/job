@@ -183,6 +183,27 @@ func TestListCompleted(t *testing.T) {
 	assert.Len(t, limited, 2)
 }
 
+func TestListDepFailed(t *testing.T) {
+	db := openMemDB(t)
+
+	depFailed := makeJob("dep-failed-1")
+	depFailed.Status = model.StatusCompleted
+	depFailed.Reason = model.ReasonDepFailed
+	require.NoError(t, db.Insert(depFailed))
+
+	exited := makeJob("exited-1")
+	exited.Status = model.StatusCompleted
+	exited.Reason = model.ReasonExited
+	require.NoError(t, db.Insert(exited))
+
+	require.NoError(t, db.Insert(makeJob("active1"))) // not completed at all
+
+	jobs, err := db.ListDepFailed()
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	assert.Equal(t, "dep-failed-1", jobs[0].Key)
+}
+
 func TestListActiveFilter(t *testing.T) {
 	db := openMemDB(t)
 

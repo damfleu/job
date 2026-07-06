@@ -158,14 +158,19 @@ func printStepKeys(w io.Writer, keys []string) {
 	}
 }
 
-// remapDeps returns a copy of deps with each key substituted using origToNew.
+// remapDeps returns a copy of deps with each key substituted using origToNew where present.
+// Keys with no entry in origToNew (e.g. a dep outside the step set) are left unchanged.
 func remapDeps(deps []model.Dep, origToNew map[string]string) []model.Dep {
 	if len(deps) == 0 {
 		return deps
 	}
 	out := make([]model.Dep, len(deps))
 	for i, dep := range deps {
-		out[i] = model.Dep{Key: origToNew[dep.Key], Kind: dep.Kind}
+		key := dep.Key
+		if newKey, ok := origToNew[dep.Key]; ok {
+			key = newKey
+		}
+		out[i] = model.Dep{Key: key, Kind: dep.Kind}
 	}
 	return out
 }

@@ -88,6 +88,16 @@ func (d *DB) ListCompletedBefore(t time.Time, context string) ([]*model.Job, err
 	return scanJobs(rows)
 }
 
+// ListDepFailed returns all jobs that completed because a dependency of theirs failed.
+func (d *DB) ListDepFailed() ([]*model.Job, error) {
+	rows, err := d.db.Query(`SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed' AND reason = 'dep_failed' ORDER BY created_at`)
+	if err != nil {
+		return nil, fmt.Errorf("db: list dep failed: %w", err)
+	}
+	defer rows.Close()
+	return scanJobs(rows)
+}
+
 func (d *DB) GetLastKeyForContext(context string) (string, error) {
 	var key string
 	err := d.db.QueryRow(

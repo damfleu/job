@@ -174,3 +174,108 @@ func TestRetryRequiresCompleted(t *testing.T) {
 
 	h.run("stop", key)
 }
+
+func TestRetryCascadeChain(t *testing.T) {
+	h := newHarness(t)
+
+	// root fails, which cascades dep_failed down through child and grandchild.
+	rootKey := runFg(h, "false")
+	h.run("run", "-A", rootKey, "echo", "child")
+	childKey := h.lastJob().Key
+	h.run("run", "-A", childKey, "echo", "grandchild")
+	grandchildKey := h.lastJob().Key
+
+	h.waitFor(childKey, model.StatusCompleted)
+	h.waitFor(grandchildKey, model.StatusCompleted)
+	child, err := h.db.Get(childKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.ReasonDepFailed, child.Reason)
+
+	r := h.run("retry", "--cascade", rootKey)
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 3, "expected root, child, and grandchild to all be retried")
+	newRootKey := strings.Fields(lines[0])[0]
+	newChildKey := strings.Fields(lines[1])[0]
+	newGrandchildKey := strings.Fields(lines[2])[0]
+	assert.NotEqual(t, rootKey, newRootKey)
+	assert.NotEqual(t, childKey, newChildKey)
+	assert.NotEqual(t, grandchildKey, newGrandchildKey)
+
+	h.waitFor(newRootKey, model.StatusCompleted)
+	h.waitFor(newChildKey, model.StatusCompleted)
+	h.waitFor(newGrandchildKey, model.StatusCompleted)
+
+	// root still fails (command is unchanged "false"), so the cascade fails again too, but
+	// the dep chain must be rewired to point at the newly retried keys, not the old ones.
+	newRoot, err := h.db.Get(newRootKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.ReasonExited, newRoot.Reason)
+	require.NotNil(t, newRoot.ExitCode)
+	assert.Equal(t, 1, *newRoot.ExitCode)
+
+	newChild, err := h.db.Get(newChildKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.ReasonDepFailed, newChild.Reason)
+	require.Len(t, newChild.Deps, 1)
+	assert.Equal(t, newRootKey, newChild.Deps[0].Key)
+
+	newGrandchild, err := h.db.Get(newGrandchildKey)
+	require.NoError(t, err)
+	assert.Equal(t, model.ReasonDepFailed, newGrandchild.Reason)
+	require.Len(t, newGrandchild.Deps, 1)
+	assert.Equal(t, newChildKey, newGrandchild.Deps[0].Key)
+}
+
+func TestRetryCascadePreservesExternalDep(t *testing.T) {
+	h := newHarness(t)
+
+	gateKey := runFg(h, "echo", "gate")
+	rootKey := runFg(h, "false")
+	h.run("run", "-A", rootKey, "-A", gateKey, "echo", "child")
+	childKey := h.lastJob().Key
+	h.waitFor(childKey, model.StatusCompleted)
+
+	r := h.run("retry", "--cascade", rootKey)
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 2)
+	newRootKey := strings.Fields(lines[0])[0]
+	newChildKey := strings.Fields(lines[1])[0]
+
+	h.waitFor(newChildKey, model.StatusCompleted)
+	newChild, err := h.db.Get(newChildKey)
+	require.NoError(t, err)
+	require.Len(t, newChild.Deps, 2)
+	assert.ElementsMatch(t, []model.Dep{
+		{Key: newRootKey, Kind: model.DepAfterSuccess},
+		{Key: gateKey, Kind: model.DepAfterSuccess}, // untouched: outside the failed cascade
+	}, newChild.Deps)
+}
+
+func TestRetryCascadeNoDependents(t *testing.T) {
+	h := newHarness(t)
+
+	rootKey := runFg(h, "echo", "original")
+	h.waitFor(rootKey, model.StatusCompleted)
+
+	r := h.run("retry", "--cascade", rootKey)
+	assert.Equal(t, 0, r.exitCode)
+
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 1)
+	newRootKey := strings.Fields(lines[0])[0]
+	assert.NotEqual(t, rootKey, newRootKey)
+
+	h.waitFor(newRootKey, model.StatusCompleted)
+}
+
+func TestRetryCascadeRejectsForeground(t *testing.T) {
+	h := newHarness(t)
+	rootKey := runFg(h, "echo", "original")
+
+	r := h.run("retry", "--cascade", "-f", rootKey)
+	assert.NotEqual(t, 0, r.exitCode, "--cascade and --foreground should be mutually exclusive")
+}
