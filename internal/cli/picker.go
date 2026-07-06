@@ -52,7 +52,7 @@ func candidatesFor(store db.JobStore, input, ctx string) ([]*model.Job, error) {
 }
 
 func pickJob(candidates []*model.Job) (*model.Job, error) {
-	if !term.IsTerminal(os.Stdin.Fd()) || !term.IsTerminal(os.Stdout.Fd()) {
+	if !term.IsTerminal(os.Stdin.Fd()) {
 		return nil, errors.New("interactive selection requires a terminal")
 	}
 	options := make([]huh.Option[*model.Job], len(candidates))
@@ -60,12 +60,18 @@ func pickJob(candidates []*model.Job) (*model.Job, error) {
 		options[i] = huh.NewOption(candidateLabel(j), j)
 	}
 	var chosen *model.Job
-	err := huh.NewSelect[*model.Job]().
+	field := huh.NewSelect[*model.Job]().
 		Title(fmt.Sprintf("%d jobs match — pick one", len(candidates))).
 		Description(candidateHeader()).
 		Options(options...).
 		Height(12).
-		Value(&chosen).
+		Value(&chosen)
+	// Render the picker to stderr so stdout stays free for the resolved
+	// job's output (e.g. `tail -f "$(job log -p -i)"`), which would
+	// otherwise break because stdout isn't a terminal in that context.
+	err := huh.NewForm(huh.NewGroup(field)).
+		WithShowHelp(false).
+		WithOutput(os.Stderr).
 		Run()
 	if err != nil {
 		return nil, fmt.Errorf("selecting job: %w", err)
