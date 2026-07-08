@@ -19,17 +19,15 @@ import (
 // to substring-match unrelated jobs' commands (those would otherwise crowd
 // out the exact match, which Search() can't surface by alias/key at all).
 func resolveJobArgInteractive(input, ctx string) (*model.Job, error) {
-	if input != "." {
-		if j, err := globalDB.Get(input); err == nil {
-			return j, nil
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return nil, err
-		}
-		if j, err := globalDB.FindByAlias(input); err == nil {
-			return j, nil
-		} else if !errors.Is(err, db.ErrNotFound) {
-			return nil, err
-		}
+	if j, err := globalDB.Get(input); err == nil {
+		return j, nil
+	} else if !errors.Is(err, db.ErrNotFound) {
+		return nil, err
+	}
+	if j, err := globalDB.FindByAlias(input); err == nil {
+		return j, nil
+	} else if !errors.Is(err, db.ErrNotFound) {
+		return nil, err
 	}
 	candidates, err := candidatesFor(globalDB, input, ctx)
 	if err != nil {
