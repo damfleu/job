@@ -14,7 +14,7 @@ var stopCmd = &cobra.Command{
 	Short: "Stop a running job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := resolveJobArg(cmd, args)
+		j, err := resolveJobArg(cmd, args, model.StatusRunning)
 		if err != nil {
 			return err
 		}

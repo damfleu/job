@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"job/internal/model"
 )
 
 var logPath bool
@@ -15,7 +17,7 @@ var logCmd = &cobra.Command{
 	Short: "Display log output for a job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := resolveJobArg(cmd, args)
+		j, err := resolveJobArg(cmd, args, model.StatusRunning)
 		if err != nil {
 			return err
 		}

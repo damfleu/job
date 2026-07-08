@@ -48,7 +48,11 @@ job log -p <key>
 job stop <key>
 ```
 
-The special key `.` always refers to the most recently started job. `job log`, `job stop`, and `job show` all default to it. `+`, `_`, and `=` refer to the most recent running, blocked, and completed job respectively, and error if none matches.
+Special keys refer to jobs by recency instead of by name:
+- `.` — the most recently started job, of any status
+- `+` / `_` / `=` — the most recent running / blocked / completed job (errors if none matches)
+
+You can also omit the key entirely: `job log`, `job show`, and `job stop` then default to the last running job, and `job retry`/`job rm` to the last completed job — falling back to `.` if no job of that status exists.
 
 Run `job --help` or `job <command> --help` for full usage.
 

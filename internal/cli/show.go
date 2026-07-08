@@ -15,7 +15,7 @@ var showCmd = &cobra.Command{
 	Short: "Show full details for a job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := resolveJobArg(cmd, args)
+		j, err := resolveJobArg(cmd, args, model.StatusRunning)
 		if err != nil {
 			return err
 		}

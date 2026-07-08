@@ -98,24 +98,20 @@ func resolveDeps(pending []model.Dep) ([]model.Dep, error) {
 	return resolved, nil
 }
 
-// keyArg returns the first element of args, or "." if args is empty.
-func keyArg(args []string) string {
-	if len(args) > 0 {
-		return args[0]
-	}
-	return "."
-}
-
-// resolveJobArg resolves the job referenced by args (or "." by default),
-// honouring --here scoping. Shared by every command that acts on one existing job.
-// With no argument and -i/--select, this browses every job instead of
-// defaulting to ".", since the picker lets you choose manually.
-func resolveJobArg(cmd *cobra.Command, args []string) (*model.Job, error) {
+// resolveJobArg resolves the job referenced by args, honouring --here scoping.
+// With no argument and not in interactive mode, it uses ResolveDefault(def)
+// instead of "." — e.g. log/show/stop prefer the last running job. In
+// interactive mode a bare invocation always browses everything, regardless
+// of def, since the picker lets you choose manually.
+func resolveJobArg(cmd *cobra.Command, args []string, def model.Status) (*model.Job, error) {
 	resolveHereCtx()
-	if len(args) == 0 && selectInteractive {
-		return resolveJobArgInteractive("", hereCtx)
+	if len(args) == 0 {
+		if selectInteractive {
+			return resolveJobArgInteractive("", hereCtx)
+		}
+		return core.ResolveDefault(globalDB, hereCtx, def)
 	}
-	input := keyArg(args)
+	input := args[0]
 	if !selectInteractive {
 		return core.ResolveKey(globalDB, input, hereCtx)
 	}

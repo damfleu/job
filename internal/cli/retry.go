@@ -18,7 +18,7 @@ var retryCmd = &cobra.Command{
 	Short: "Re-run a completed job",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		j, err := resolveJobArg(cmd, args)
+		j, err := resolveJobArg(cmd, args, model.StatusCompleted)
 		if err != nil {
 			return err
 		}
