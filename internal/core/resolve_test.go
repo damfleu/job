@@ -69,6 +69,18 @@ func (f *fakeStore) GetLastKeyForContext(context string) (string, error) {
 	}
 	return "", nil
 }
+func (f *fakeStore) GetLastKeyByStatus(status model.Status, context string) (string, error) {
+	for _, j := range f.jobs {
+		if j.Status != status {
+			continue
+		}
+		if context != "" && j.Context != context {
+			continue
+		}
+		return j.Key, nil
+	}
+	return "", nil
+}
 func (f *fakeStore) SetLastKey(key string) error { f.lastKey = key; return nil }
 func (f *fakeStore) Insert(job *model.Job) error         { return nil }
 func (f *fakeStore) Update(job *model.Job) error         { return nil }
@@ -221,4 +233,117 @@ func TestResolveDotInContextNoMatch(t *testing.T) {
 
 	_, err := ResolveKey(store, ".", "projectB")
 	assert.Error(t, err)
+}
+
+func TestResolveRunningSymbol(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusRunning),
+	}}
+	j, err := ResolveKey(store, "+", "")
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveRunningSymbolNoMatch(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusCompleted),
+	}}
+	_, err := ResolveKey(store, "+", "")
+	assert.EqualError(t, err, "no running jobs")
+}
+
+func TestResolveBlockedSymbol(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusBlocked),
+	}}
+	j, err := ResolveKey(store, "_", "")
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveBlockedSymbolNoMatch(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusCompleted),
+	}}
+	_, err := ResolveKey(store, "_", "")
+	assert.EqualError(t, err, "no blocked jobs")
+}
+
+func TestResolveCompletedSymbol(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusCompleted),
+	}}
+	j, err := ResolveKey(store, "=", "")
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveCompletedSymbolNoMatch(t *testing.T) {
+	store := &fakeStore{jobs: []*model.Job{
+		job("key1", "", []string{"make"}, model.StatusRunning),
+	}}
+	_, err := ResolveKey(store, "=", "")
+	assert.EqualError(t, err, "no completed jobs")
+}
+
+func TestResolveRunningSymbolInContext(t *testing.T) {
+	projectA := job("key_a", "", []string{"make"}, model.StatusRunning)
+	projectA.Context = "projectA"
+	projectB := job("key_b", "", []string{"make"}, model.StatusRunning)
+	projectB.Context = "projectB"
+	store := &fakeStore{jobs: []*model.Job{projectA, projectB}}
+
+	j, err := ResolveKey(store, "+", "projectA")
+	require.NoError(t, err)
+	assert.Equal(t, "key_a", j.Key)
+}
+
+func TestResolveRunningSymbolInContextNoMatch(t *testing.T) {
+	j := job("key_a", "", []string{"make"}, model.StatusRunning)
+	j.Context = "projectA"
+	store := &fakeStore{jobs: []*model.Job{j}}
+
+	_, err := ResolveKey(store, "+", "projectB")
+	assert.EqualError(t, err, `no running jobs in current context "projectB"`)
+}
+
+func TestResolveDefaultPrefersStatus(t *testing.T) {
+	running := job("key1", "", []string{"make"}, model.StatusRunning)
+	completed := job("key2", "", []string{"go"}, model.StatusCompleted)
+	store := &fakeStore{jobs: []*model.Job{running, completed}, lastKey: "key2"}
+
+	j, err := ResolveDefault(store, "", model.StatusRunning)
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveDefaultFallsBackToLastCreated(t *testing.T) {
+	blocked := job("key1", "", []string{"make"}, model.StatusBlocked)
+	store := &fakeStore{jobs: []*model.Job{blocked}, lastKey: "key1"}
+
+	j, err := ResolveDefault(store, "", model.StatusRunning)
+	require.NoError(t, err)
+	assert.Equal(t, "key1", j.Key)
+}
+
+func TestResolveDefaultInContext(t *testing.T) {
+	projectA := job("key_a", "", []string{"make"}, model.StatusRunning)
+	projectA.Context = "projectA"
+	projectB := job("key_b", "", []string{"make"}, model.StatusRunning)
+	projectB.Context = "projectB"
+	store := &fakeStore{jobs: []*model.Job{projectA, projectB}}
+
+	j, err := ResolveDefault(store, "projectA", model.StatusRunning)
+	require.NoError(t, err)
+	assert.Equal(t, "key_a", j.Key)
+}
+
+func TestResolveDefaultInContextFallsBack(t *testing.T) {
+	blocked := job("key_a", "", []string{"make"}, model.StatusBlocked)
+	blocked.Context = "projectA"
+	store := &fakeStore{jobs: []*model.Job{blocked}}
+
+	j, err := ResolveDefault(store, "projectA", model.StatusRunning)
+	require.NoError(t, err)
+	assert.Equal(t, "key_a", j.Key)
 }

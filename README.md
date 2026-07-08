@@ -48,7 +48,7 @@ job log -p <key>
 job stop <key>
 ```
 
-The special key `.` always refers to the most recently started job. `job log`, `job stop`, and `job show` all default to it.
+The special key `.` always refers to the most recently started job. `job log`, `job stop`, and `job show` all default to it. `+`, `_`, and `=` refer to the most recent running, blocked, and completed job respectively, and error if none matches.
 
 Run `job --help` or `job <command> --help` for full usage.
 
@@ -62,9 +62,10 @@ Pass `--automated` to `run` to mark a job as automated; those jobs do not update
 
 Key resolution order:
 1. `.` is the most recent job
-2. Exact key or alias match
-3. Substring match on command (active jobs preferred)
-4. Prefix match on key
+2. `+` / `_` / `=` is the most recent running / blocked / completed job (hard error if none matches)
+3. Exact key or alias match
+4. Substring match on command (active jobs preferred)
+5. Prefix match on key
 
 ### Dependencies
 

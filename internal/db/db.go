@@ -71,6 +71,7 @@ type JobStore interface {
 	FindByKeyPrefix(prefix string) ([]*model.Job, error)
 	GetLastKey() (string, error)
 	GetLastKeyForContext(context string) (string, error)
+	GetLastKeyByStatus(status model.Status, context string) (string, error)
 	SetLastKey(key string) error
 
 	SaveSequence(seq *model.Sequence) error

@@ -491,6 +491,71 @@ func TestGetLastKeyForContextExcludesAutomated(t *testing.T) {
 	assert.Equal(t, "human", key)
 }
 
+func TestGetLastKeyByStatus(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	older := makeJob("older")
+	older.Status = model.StatusRunning
+	older.CreatedAt = now.Add(-time.Minute).Truncate(time.Millisecond)
+	newer := makeJob("newer")
+	newer.Status = model.StatusRunning
+	newer.CreatedAt = now.Truncate(time.Millisecond)
+	completed := makeJob("completed")
+	completed.Status = model.StatusCompleted
+	completed.CreatedAt = now.Add(time.Minute).Truncate(time.Millisecond)
+	require.NoError(t, db.Insert(older))
+	require.NoError(t, db.Insert(newer))
+	require.NoError(t, db.Insert(completed))
+
+	key, err := db.GetLastKeyByStatus(model.StatusRunning, "")
+	require.NoError(t, err)
+	assert.Equal(t, "newer", key)
+}
+
+func TestGetLastKeyByStatusContext(t *testing.T) {
+	db := openMemDB(t)
+
+	a := makeJob("a1")
+	a.Status = model.StatusRunning
+	a.Context = "projectA"
+	b := makeJob("b1")
+	b.Status = model.StatusRunning
+	b.Context = "projectB"
+	require.NoError(t, db.Insert(a))
+	require.NoError(t, db.Insert(b))
+
+	key, err := db.GetLastKeyByStatus(model.StatusRunning, "projectA")
+	require.NoError(t, err)
+	assert.Equal(t, "a1", key)
+}
+
+func TestGetLastKeyByStatusNoMatch(t *testing.T) {
+	db := openMemDB(t)
+	require.NoError(t, db.Insert(makeJob("k1")))
+
+	key, err := db.GetLastKeyByStatus(model.StatusRunning, "")
+	require.NoError(t, err)
+	assert.Empty(t, key)
+}
+
+func TestGetLastKeyByStatusExcludesAutomated(t *testing.T) {
+	db := openMemDB(t)
+
+	automated := makeJob("automated")
+	automated.Status = model.StatusRunning
+	automated.Automated = true
+	human := makeJob("human")
+	human.Status = model.StatusRunning
+	human.CreatedAt = time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond)
+	require.NoError(t, db.Insert(automated))
+	require.NoError(t, db.Insert(human))
+
+	key, err := db.GetLastKeyByStatus(model.StatusRunning, "")
+	require.NoError(t, err)
+	assert.Equal(t, "human", key)
+}
+
 func TestGetByKeys(t *testing.T) {
 	db := openMemDB(t)
 

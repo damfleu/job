@@ -113,6 +113,26 @@ func (d *DB) GetLastKeyForContext(context string) (string, error) {
 	return key, nil
 }
 
+func (d *DB) GetLastKeyByStatus(status model.Status, context string) (string, error) {
+	query := `SELECT key FROM jobs WHERE status = ? AND automated = 0`
+	args := []any{string(status)}
+	if context != "" {
+		query += ` AND context = ?`
+		args = append(args, context)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 1`
+
+	var key string
+	err := d.db.QueryRow(query, args...).Scan(&key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("db: get last key by status %q (context %q): %w", status, context, err)
+	}
+	return key, nil
+}
+
 // searchLimit caps the number of rows Search returns, most-recently-created first.
 // An empty query matches every job (LIKE "%%"), so this also bounds the
 // picker's bare-"." candidate list.
