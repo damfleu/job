@@ -39,13 +39,10 @@ func resolveJobArgInteractive(input, ctx string) (*model.Job, error) {
 	return pickJob(candidates)
 }
 
-// candidatesFor returns the picker's candidate list for input. A bare "."
-// means "no filter, just browse recent jobs" — Search's empty-query LIKE
-// pattern already matches everything, so no separate query is needed.
+// candidatesFor returns the picker's candidate list for input. An empty
+// input means "no filter, just browse recent jobs" — Search's empty-query
+// LIKE pattern already matches everything, so no separate query is needed.
 func candidatesFor(store db.JobStore, input, ctx string) ([]*model.Job, error) {
-	if input == "." {
-		return store.Search("", ctx)
-	}
 	return store.Search(input, ctx)
 }
 

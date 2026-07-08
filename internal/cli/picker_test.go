@@ -21,12 +21,22 @@ func TestCandidatesForQuery(t *testing.T) {
 	assert.Equal(t, "make1", got[0].Key)
 }
 
-func TestCandidatesForDot(t *testing.T) {
+func TestCandidatesForDotSearchesLiterally(t *testing.T) {
 	d := openTestDB(t)
 	require.NoError(t, d.Insert(makeTestJob("a", model.StatusRunning)))
 	require.NoError(t, d.Insert(makeTestJob("b", model.StatusCompleted)))
 
 	got, err := candidatesFor(d, ".", "")
+	require.NoError(t, err)
+	assert.Empty(t, got, "\".\" should search commands literally, not browse everything")
+}
+
+func TestCandidatesForEmptyInputBrowsesAll(t *testing.T) {
+	d := openTestDB(t)
+	require.NoError(t, d.Insert(makeTestJob("a", model.StatusRunning)))
+	require.NoError(t, d.Insert(makeTestJob("b", model.StatusCompleted)))
+
+	got, err := candidatesFor(d, "", "")
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"a", "b"}, jobKeys(got))
 }
@@ -40,7 +50,7 @@ func TestCandidatesForContext(t *testing.T) {
 	require.NoError(t, d.Insert(a))
 	require.NoError(t, d.Insert(b))
 
-	got, err := candidatesFor(d, ".", "projectA")
+	got, err := candidatesFor(d, "", "projectA")
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, "a", got[0].Key)

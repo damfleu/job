@@ -108,8 +108,13 @@ func keyArg(args []string) string {
 
 // resolveJobArg resolves the job referenced by args (or "." by default),
 // honouring --here scoping. Shared by every command that acts on one existing job.
+// With no argument and -i/--select, this browses every job instead of
+// defaulting to ".", since the picker lets you choose manually.
 func resolveJobArg(cmd *cobra.Command, args []string) (*model.Job, error) {
 	resolveHereCtx()
+	if len(args) == 0 && selectInteractive {
+		return resolveJobArgInteractive("", hereCtx)
+	}
 	input := keyArg(args)
 	if !selectInteractive {
 		return core.ResolveKey(globalDB, input, hereCtx)
