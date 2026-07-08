@@ -150,6 +150,12 @@ func TestSequenceRmUnknown(t *testing.T) {
 	assert.NotEqual(t, 0, r.exitCode)
 }
 
+func TestSequenceSaveRequiresKey(t *testing.T) {
+	h := newHarness(t)
+	r := h.run("sequence", "save", "no-keys")
+	assert.NotEqual(t, 0, r.exitCode)
+}
+
 func TestPruneSkipsJobsInSequence(t *testing.T) {
 	h := newHarness(t)
 

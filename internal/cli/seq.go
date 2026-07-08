@@ -28,16 +28,13 @@ var seqCmd = &cobra.Command{
 }
 
 var seqSaveCmd = &cobra.Command{
-	Use:   "save <name> [key...]",
+	Use:   "save <name> <key> [key...]",
 	Short: "Save jobs and their deps as a named sequence",
-	Args:  cobra.MinimumNArgs(1),
+	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resolveHereCtx()
 		name := args[0]
 		keys := args[1:]
-		if len(keys) == 0 {
-			keys = []string{"."}
-		}
 		existing, err := globalDB.GetSequence(name)
 		if err != nil && !errors.Is(err, db.ErrSequenceNotFound) {
 			return err
