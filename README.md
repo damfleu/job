@@ -46,6 +46,8 @@ job log -p <key>
 
 # Stop a running/pending job
 job stop <key>
+# Block until a job completes, then print its key and exit code
+job wait <key>
 ```
 
 Special keys refer to jobs by recency instead of by name:
