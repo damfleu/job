@@ -89,6 +89,8 @@ Use `-a`/`-A` multiple times to specify multiple dependencies. A job whose `--af
 
 Context resolvers scope jobs to a workspace. Most commands accept `--here` to scope `.` resolution to the current context instead of globally. `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 
+`contrib/context-claude.sh` scopes jobs launched by Claude Code to their own `claude-<session-id>` context, isolated from your `--here` view. Together with `--automated` (see [Job keys](#job-keys)) and the `--json` output on `show`/`list`, these are the building blocks a Claude Code skill for `job` would use.
+
 ### Sequences
 
 Sequences capture one or more jobs and their combined upstream dependencies as a replayable workflow:
