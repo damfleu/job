@@ -23,6 +23,7 @@ var (
 	lsAll    bool
 	lsFilter string
 	lsLimit  int
+	lsJSON   bool
 )
 
 var lsCmd = &cobra.Command{
@@ -45,6 +46,19 @@ var lsCmd = &cobra.Command{
 		active, err := globalDB.ListActive(lsFilter, hereCtx)
 		if err != nil {
 			return err
+		}
+
+		if lsJSON {
+			completed, err := globalDB.ListCompleted(limit, lsFilter, hereCtx)
+			if err != nil {
+				return err
+			}
+			jobs := append(active, completed...)
+			views := make([]jobView, len(jobs))
+			for i, j := range jobs {
+				views[i] = toJobView(j)
+			}
+			return printJSON(views)
 		}
 
 		// -a or no active jobs: show table
@@ -84,6 +98,7 @@ func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
 	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show")
+	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "output as JSON")
 	addHereFlag(lsCmd)
 	rootCmd.AddCommand(lsCmd)
 }

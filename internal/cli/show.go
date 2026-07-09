@@ -10,6 +10,8 @@ import (
 	"job/internal/model"
 )
 
+var showJSON bool
+
 var showCmd = &cobra.Command{
 	Use:   "show [key]",
 	Short: "Show full details for a job",
@@ -19,12 +21,16 @@ var showCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		if showJSON {
+			return printJSON(toJobView(j))
+		}
 		printJob(j)
 		return nil
 	},
 }
 
 func init() {
+	showCmd.Flags().BoolVar(&showJSON, "json", false, "output as JSON")
 	addHereFlag(showCmd)
 	addSelectFlag(showCmd)
 	rootCmd.AddCommand(showCmd)
