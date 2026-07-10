@@ -99,11 +99,16 @@ func (d *DB) ListDepFailed() ([]*model.Job, error) {
 }
 
 func (d *DB) GetLastKeyForContext(context string) (string, error) {
+	query := `SELECT key FROM jobs WHERE automated = 0`
+	args := []any{}
+	if context != "" {
+		query += ` AND context = ?`
+		args = append(args, context)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 1`
+
 	var key string
-	err := d.db.QueryRow(
-		`SELECT key FROM jobs WHERE context = ? AND automated = 0 ORDER BY created_at DESC LIMIT 1`,
-		context,
-	).Scan(&key)
+	err := d.db.QueryRow(query, args...).Scan(&key)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -155,8 +160,16 @@ func (d *DB) Search(query, context string) ([]*model.Job, error) {
 	return scanJobs(rows)
 }
 
-func (d *DB) FindByAlias(alias string) (*model.Job, error) {
-	row := d.db.QueryRow(`SELECT `+jobCols+` FROM jobs WHERE alias = ? ORDER BY created_at DESC LIMIT 1`, alias)
+func (d *DB) FindByAlias(alias, context string) (*model.Job, error) {
+	query := `SELECT ` + jobCols + ` FROM jobs WHERE alias = ?`
+	args := []any{alias}
+	if context != "" {
+		query += ` AND context = ?`
+		args = append(args, context)
+	}
+	query += ` ORDER BY created_at DESC LIMIT 1`
+
+	row := d.db.QueryRow(query, args...)
 	job, err := scanJob(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

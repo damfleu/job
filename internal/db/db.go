@@ -67,7 +67,7 @@ type JobStore interface {
 	ListCompletedBefore(t time.Time, context string) ([]*model.Job, error)
 	ListDepFailed() ([]*model.Job, error)
 	Search(query, context string) ([]*model.Job, error)
-	FindByAlias(alias string) (*model.Job, error)
+	FindByAlias(alias, context string) (*model.Job, error)
 	FindByKeyPrefix(prefix string) ([]*model.Job, error)
 	GetLastKey() (string, error)
 	GetLastKeyForContext(context string) (string, error)

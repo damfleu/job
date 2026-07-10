@@ -27,11 +27,15 @@ func (f *fakeStore) Get(key string) (*model.Job, error) {
 	return nil, db.ErrNotFound
 }
 
-func (f *fakeStore) FindByAlias(alias string) (*model.Job, error) {
+func (f *fakeStore) FindByAlias(alias, context string) (*model.Job, error) {
 	for _, j := range f.jobs {
-		if j.Alias == alias {
-			return j, nil
+		if j.Alias != alias {
+			continue
 		}
+		if context != "" && j.Context != context {
+			continue
+		}
+		return j, nil
 	}
 	return nil, db.ErrNotFound
 }

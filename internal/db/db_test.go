@@ -341,9 +341,33 @@ func TestFindByAliasMostRecent(t *testing.T) {
 	later.CreatedAt = time.Now().UTC()
 	require.NoError(t, db.Insert(later))
 
-	got, err := db.FindByAlias("foo")
+	got, err := db.FindByAlias("foo", "")
 	require.NoError(t, err)
 	assert.Equal(t, "new_key", got.Key, "should return most recently created job")
+}
+
+func TestFindByAliasScopedToContext(t *testing.T) {
+	db := openMemDB(t)
+
+	a := makeJob("a1")
+	a.Alias = "build"
+	a.Context = "projectA"
+	b := makeJob("b1")
+	b.Alias = "build"
+	b.Context = "projectB"
+	require.NoError(t, db.Insert(a))
+	require.NoError(t, db.Insert(b))
+
+	got, err := db.FindByAlias("build", "projectA")
+	require.NoError(t, err)
+	assert.Equal(t, "a1", got.Key)
+
+	got, err = db.FindByAlias("build", "projectB")
+	require.NoError(t, err)
+	assert.Equal(t, "b1", got.Key)
+
+	_, err = db.FindByAlias("build", "")
+	require.NoError(t, err)
 }
 
 func TestFindByKeyPrefix(t *testing.T) {
@@ -489,6 +513,24 @@ func TestGetLastKeyForContextExcludesAutomated(t *testing.T) {
 	key, err := db.GetLastKeyForContext("projectA")
 	require.NoError(t, err)
 	assert.Equal(t, "human", key)
+}
+
+func TestGetLastKeyForContextEmptyIsGlobal(t *testing.T) {
+	db := openMemDB(t)
+
+	now := time.Now().UTC()
+	a := makeJob("a1")
+	a.Context = "projectA"
+	a.CreatedAt = now.Add(-time.Minute).Truncate(time.Millisecond)
+	b := makeJob("b1")
+	b.Context = "projectB"
+	b.CreatedAt = now.Truncate(time.Millisecond)
+	require.NoError(t, db.Insert(a))
+	require.NoError(t, db.Insert(b))
+
+	key, err := db.GetLastKeyForContext("")
+	require.NoError(t, err)
+	assert.Equal(t, "b1", key, "empty context should return the most recent job across all contexts")
 }
 
 func TestGetLastKeyByStatus(t *testing.T) {

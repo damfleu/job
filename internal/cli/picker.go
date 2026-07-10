@@ -24,7 +24,7 @@ func resolveJobArgInteractive(input, ctx string) (*model.Job, error) {
 	} else if !errors.Is(err, db.ErrNotFound) {
 		return nil, err
 	}
-	if j, err := globalDB.FindByAlias(input); err == nil {
+	if j, err := globalDB.FindByAlias(input, ""); err == nil {
 		return j, nil
 	} else if !errors.Is(err, db.ErrNotFound) {
 		return nil, err

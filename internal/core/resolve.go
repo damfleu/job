@@ -51,7 +51,7 @@ func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	}
 
 	// exact alias
-	job, err = store.FindByAlias(input)
+	job, err = store.FindByAlias(input, "")
 	if err == nil {
 		return job, nil
 	}
