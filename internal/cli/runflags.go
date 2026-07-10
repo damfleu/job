@@ -43,7 +43,17 @@ func (d depFlag) Set(val string) error {
 // the returned options stays empty so CreateAndSpawn/CreateAndRunForeground can apply their own
 // default).
 func buildRunOptions(command []string, workDir string, f RunFlags) (core.RunOptions, error) {
-	deps, err := resolveDeps(f.Deps)
+	resolvedWorkDir := workDir
+	if resolvedWorkDir == "" {
+		resolvedWorkDir, _ = os.Getwd()
+	}
+	ctx := core.ResolveContext(resolvedWorkDir, globalConfig.Context.Resolvers)
+
+	depCtx := ctx
+	if anyScope {
+		depCtx = ""
+	}
+	deps, err := resolveDeps(f.Deps, depCtx)
 	if err != nil {
 		return core.RunOptions{}, err
 	}
@@ -55,16 +65,12 @@ func buildRunOptions(command []string, workDir string, f RunFlags) (core.RunOpti
 			notifiers = append(notifiers, n.Program)
 		}
 	}
-	resolvedWorkDir := workDir
-	if resolvedWorkDir == "" {
-		resolvedWorkDir, _ = os.Getwd()
-	}
 	return core.RunOptions{
 		Alias:     f.Alias,
 		Deps:      deps,
 		WorkDir:   workDir,
 		Notifiers: notifiers,
-		Context:   core.ResolveContext(resolvedWorkDir, globalConfig.Context.Resolvers),
+		Context:   ctx,
 		Automated: f.Automated,
 	}, nil
 }
@@ -200,6 +206,7 @@ func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	cmd.Flags().VarP(depFlag{model.DepAfter, &f.Deps}, "after", "a", "run after job completes (any exit code)")
 	cmd.Flags().VarP(depFlag{model.DepAfterSuccess, &f.Deps}, "after-success", "A", "run only if job succeeds (exit 0)")
 	cmd.Flags().BoolVar(&f.Automated, "automated", false, "mark job as automated (not human-initiated); skips '.' tracking")
+	addAnyFlag(cmd)
 	cmd.MarkFlagsMutuallyExclusive("foreground", "watch")
 	cmd.MarkFlagsMutuallyExclusive("foreground", "quiet")
 }

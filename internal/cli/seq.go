@@ -32,7 +32,7 @@ var seqSaveCmd = &cobra.Command{
 	Short: "Save jobs and their deps as a named sequence",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resolveHereCtx()
+		resolveCtx()
 		name := args[0]
 		keys := args[1:]
 		existing, err := globalDB.GetSequence(name)
@@ -143,7 +143,7 @@ var seqRmCmd = &cobra.Command{
 }
 
 func init() {
-	addHereFlag(seqSaveCmd)
+	addAnyFlag(seqSaveCmd)
 	addCwdFlag(seqRunCmd, &seqRunCwd, "run steps in a directory instead of their original directories")
 	seqRunCmd.Flags().BoolVarP(&seqRunNotify, "notify", "n", false, "notify on completion of each step")
 	seqRunCmd.Flags().VarP(depFlag{model.DepAfter, &seqRunDeps}, "after", "a", "run sequence after job completes (any exit code)")

@@ -42,7 +42,7 @@ var lsCmd = &cobra.Command{
 			limit = globalConfig.List.Limit
 		}
 
-		resolveHereCtx()
+		resolveCtx()
 		active, err := globalDB.ListActive(lsFilter, hereCtx)
 		if err != nil {
 			return err
@@ -99,7 +99,7 @@ func init() {
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
 	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show")
 	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "output as JSON")
-	addHereFlag(lsCmd)
+	addAnyFlag(lsCmd)
 	rootCmd.AddCommand(lsCmd)
 }
 

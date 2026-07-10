@@ -19,18 +19,19 @@ var version = "dev"
 var globalDB *db.DB
 var globalConfig config.Config
 
-var here bool
+var anyScope bool
 var hereCtx string
 
-// addHereFlag registers --here on cmd, writing into the shared here global.
-func addHereFlag(cmd *cobra.Command) {
-	cmd.Flags().BoolVar(&here, "here", false, "filter to jobs from the current directory's context")
+// addAnyFlag registers --any on cmd, writing into the shared anyScope global.
+func addAnyFlag(cmd *cobra.Command) {
+	cmd.Flags().BoolVar(&anyScope, "any", false, "resolve across all contexts; default is the current context")
 }
 
-// resolveHereCtx populates hereCtx when --here was passed. Must be called after
-// globalConfig is loaded (i.e. inside a command's RunE, not in init).
-func resolveHereCtx() {
-	if here {
+// resolveCtx populates hereCtx with the current directory's context, unless
+// --any was passed. Must be called after globalConfig is loaded (i.e. inside
+// a command's RunE, not in init).
+func resolveCtx() {
+	if !anyScope {
 		cwd, _ := os.Getwd()
 		hereCtx = core.ResolveContext(cwd, globalConfig.Context.Resolvers)
 	}
@@ -85,11 +86,12 @@ func Execute() {
 	}
 }
 
-// resolveDeps resolves each pending dep's key via fuzzy matching, preserving order.
-func resolveDeps(pending []model.Dep) ([]model.Dep, error) {
+// resolveDeps resolves each pending dep's key via fuzzy matching, preserving order,
+// scoped to ctx (empty ctx resolves globally).
+func resolveDeps(pending []model.Dep, ctx string) ([]model.Dep, error) {
 	resolved := make([]model.Dep, len(pending))
 	for i, dep := range pending {
-		j, err := core.ResolveKey(globalDB, dep.Key, "")
+		j, err := core.ResolveKey(globalDB, dep.Key, ctx)
 		if err != nil {
 			return nil, fmt.Errorf("resolving dep %q: %w", dep.Key, err)
 		}
@@ -98,13 +100,14 @@ func resolveDeps(pending []model.Dep) ([]model.Dep, error) {
 	return resolved, nil
 }
 
-// resolveJobArg resolves the job referenced by args, honouring --here scoping.
-// With no argument and not in interactive mode, it uses ResolveDefault(def)
-// instead of "." — e.g. log/show/stop prefer the last running job. In
-// interactive mode a bare invocation always browses everything, regardless
-// of def, since the picker lets you choose manually.
+// resolveJobArg resolves the job referenced by args, scoped to the current
+// context unless --any was passed. With no argument and not in interactive
+// mode, it uses ResolveDefault(def) instead of "." — e.g. log/show/stop
+// prefer the last running job. In interactive mode a bare invocation always
+// browses everything, regardless of def, since the picker lets you choose
+// manually.
 func resolveJobArg(cmd *cobra.Command, args []string, def model.Status) (*model.Job, error) {
-	resolveHereCtx()
+	resolveCtx()
 	if len(args) == 0 {
 		if selectInteractive {
 			return resolveJobArgInteractive("", hereCtx)

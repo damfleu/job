@@ -85,7 +85,7 @@ func TestJobListInvalidFilter(t *testing.T) {
 	assert.NotEqual(t, 0, r.exitCode)
 }
 
-func TestListHere(t *testing.T) {
+func TestListDefaultScopedToContext(t *testing.T) {
 	h := newHarness(t)
 	dirA := t.TempDir()
 	dirB := t.TempDir()
@@ -97,10 +97,28 @@ func TestListHere(t *testing.T) {
 	h.runFrom(dirA, "run", "-f", "echo", "from-a")
 	h.runFrom(dirB, "run", "-f", "echo", "from-b")
 
-	r := h.runFrom(dirA, "list", "--here")
+	r := h.runFrom(dirA, "list")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "echo from-a")
 	assert.NotContains(t, r.stdout, "echo from-b")
+}
+
+func TestListAnyReachesAcrossContexts(t *testing.T) {
+	h := newHarness(t)
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+
+	// resolver that outputs the working directory — disambiguates the two dirs
+	script := h.writeScript("pwd")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+
+	h.runFrom(dirA, "run", "-f", "echo", "from-a")
+	h.runFrom(dirB, "run", "-f", "echo", "from-b")
+
+	r := h.runFrom(dirA, "list", "--any")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "echo from-a")
+	assert.Contains(t, r.stdout, "echo from-b")
 }
 
 func TestJobShowContext(t *testing.T) {

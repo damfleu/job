@@ -50,7 +50,7 @@ job stop <key>
 job wait <key>
 ```
 
-Special keys refer to jobs by recency instead of by name:
+Special keys refer to jobs by recency instead of by name, scoped to the current context by default (pass `--any` to reach across all contexts; see [Context](#context)):
 - `.` — the most recently started job, of any status
 - `+` / `_` / `=` — the most recent running / blocked / completed job (errors if none matches)
 
@@ -62,16 +62,16 @@ Run `job --help` or `job <command> --help` for full usage.
 
 ### Job keys
 
-Every job gets a unique key of the form `{unix_ts}_{8hex}_{program}` (e.g. `1712912345_a3f1c8d2_make`). The special key `.` refers to the most recently started human-initiated job.
+Every job gets a unique key of the form `{unix_ts}_{8hex}_{program}` (e.g. `1712912345_a3f1c8d2_make`). The special key `.` refers to the most recently started human-initiated job in the current context (or globally with `--any`).
 
-Pass `--automated` to `run` to mark a job as automated; those jobs do not update the `.` pointer. Useful for scripts and scheduled tasks.
+Pass `--automated` to `run` to mark a job as automated; those jobs are never a match for `.` or the `+`/`_`/`=` symbols. Useful for scripts and scheduled tasks.
 
 Key resolution order:
-1. `.` is the most recent job
-2. `+` / `_` / `=` is the most recent running / blocked / completed job (hard error if none matches)
-3. Exact key or alias match
-4. Substring match on command (active jobs preferred)
-5. Prefix match on key
+1. `.` is the most recent job, scoped to the current context (or globally with `--any`)
+2. `+` / `_` / `=` is the most recent running / blocked / completed job, same scoping (hard error if none matches)
+3. Exact key or alias match (alias lookup is context-scoped; a full generated key is unique and always resolves globally)
+4. Substring match on command, same scoping (active jobs preferred)
+5. Prefix match on key (always global: it matches the unique generated key, which context can't disambiguate)
 
 ### Dependencies
 
@@ -87,9 +87,9 @@ Use `-a`/`-A` multiple times to specify multiple dependencies. A job whose `--af
 
 ### Context
 
-Context resolvers scope jobs to a workspace. Most commands accept `--here` to scope `.` resolution to the current context instead of globally. `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
+Context resolvers scope jobs to a workspace. Resolution (`.`, `+`/`_`/`=`, aliases, substring matches, and `-a`/`-A` dependency chaining) is scoped to the current context by default; pass `--any` to reach across all contexts instead. `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 
-`contrib/context-claude.sh` scopes jobs launched by Claude Code to their own `claude-<session-id>` context, isolated from your `--here` view. Together with `--automated` (see [Job keys](#job-keys)) and the `--json` output on `show`/`list`, these are the building blocks a Claude Code skill for `job` would use.
+`contrib/context-claude.sh` scopes jobs launched by Claude Code to their own `claude-<session-id>` context, isolated from your default view. Together with the `--json` output on `show`/`list`, these are the building blocks a Claude Code skill for `job` would use.
 
 ### Sequences
 

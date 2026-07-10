@@ -18,7 +18,7 @@ var waitCmd = &cobra.Command{
 	Short: "Block until one or more jobs complete",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resolveHereCtx()
+		resolveCtx()
 		keys, err := resolveWaitKeys(args)
 		if err != nil {
 			return err
@@ -41,12 +41,13 @@ var waitCmd = &cobra.Command{
 }
 
 func init() {
-	addHereFlag(waitCmd)
+	addAnyFlag(waitCmd)
 	rootCmd.AddCommand(waitCmd)
 }
 
-// resolveWaitKeys resolves args to job keys, honouring --here. With no args it
-// falls back to the last running job, same default as log/show/stop.
+// resolveWaitKeys resolves args to job keys, scoped to the current context
+// unless --any was passed. With no args it falls back to the last running
+// job, same default as log/show/stop.
 func resolveWaitKeys(args []string) ([]string, error) {
 	if len(args) == 0 {
 		j, err := core.ResolveDefault(globalDB, hereCtx, model.StatusRunning)

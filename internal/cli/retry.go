@@ -57,7 +57,6 @@ func retryCascadeJob(cmd *cobra.Command, j *model.Job) error {
 
 func init() {
 	addRunFlags(retryCmd, &retryFlags)
-	addHereFlag(retryCmd)
 	addSelectFlag(retryCmd)
 	addCwdFlag(retryCmd, &retryCwd, "run in a directory instead of the original")
 	retryCmd.Flags().BoolVarP(&retryCascade, "cascade", "c", false, "also retry every job that failed as a result of this one")

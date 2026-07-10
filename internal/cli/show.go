@@ -31,7 +31,7 @@ var showCmd = &cobra.Command{
 
 func init() {
 	showCmd.Flags().BoolVar(&showJSON, "json", false, "output as JSON")
-	addHereFlag(showCmd)
+	addAnyFlag(showCmd)
 	addSelectFlag(showCmd)
 	rootCmd.AddCommand(showCmd)
 }

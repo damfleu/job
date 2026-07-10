@@ -40,7 +40,7 @@ var logCmd = &cobra.Command{
 
 func init() {
 	logCmd.Flags().BoolVarP(&logPath, "path", "p", false, "print log file path only")
-	addHereFlag(logCmd)
+	addAnyFlag(logCmd)
 	addSelectFlag(logCmd)
 	rootCmd.AddCommand(logCmd)
 }

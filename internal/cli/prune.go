@@ -27,12 +27,12 @@ func init() {
 	pruneCmd.Flags().StringVar(&pruneBefore, "before", "", "delete jobs that completed before this job")
 	pruneCmd.MarkFlagsMutuallyExclusive("older-than", "before")
 	pruneCmd.MarkFlagsOneRequired("older-than", "before")
-	addHereFlag(pruneCmd)
+	addAnyFlag(pruneCmd)
 	rootCmd.AddCommand(pruneCmd)
 }
 
 func runPrune(cmd *cobra.Command, args []string) error {
-	resolveHereCtx()
+	resolveCtx()
 	var cutoff time.Time
 	switch {
 	case pruneOlderThan != "":
