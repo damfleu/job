@@ -120,7 +120,7 @@ func TestStopAlreadyCompleted(t *testing.T) {
 	_, err := CreateAndRunForeground(store, stateDir, []string{"true"}, RunOptions{})
 	require.NoError(t, err)
 
-	key, _ := store.GetLastKey()
+	key, _ := store.GetLastKeyForContext("")
 	assert.Error(t, StopJob(store, key))
 }
 

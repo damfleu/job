@@ -60,11 +60,6 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 	if err := store.Insert(j); err != nil {
 		return 0, err
 	}
-	if !opts.Automated {
-		if err := store.SetLastKey(key); err != nil {
-			return 0, err
-		}
-	}
 
 	if len(opts.Deps) > 0 {
 		j.Status = model.StatusBlocked
@@ -160,11 +155,6 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 
 	if err := store.Insert(j); err != nil {
 		return "", err
-	}
-	if !opts.Automated {
-		if err := store.SetLastKey(key); err != nil {
-			return "", err
-		}
 	}
 
 	// pre-create the log file so it exists before __exec opens it

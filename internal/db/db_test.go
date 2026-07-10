@@ -631,22 +631,3 @@ func TestGetByKeysUnknown(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "k1", got[0].Key)
 }
-
-func TestLastKey(t *testing.T) {
-	db := openMemDB(t)
-
-	key, err := db.GetLastKey()
-	require.NoError(t, err)
-	assert.Empty(t, key)
-
-	require.NoError(t, db.SetLastKey("abc123"))
-	key, err = db.GetLastKey()
-	require.NoError(t, err)
-	assert.Equal(t, "abc123", key)
-
-	// overwrite
-	require.NoError(t, db.SetLastKey("xyz999"))
-	key, err = db.GetLastKey()
-	require.NoError(t, err)
-	assert.Equal(t, "xyz999", key)
-}

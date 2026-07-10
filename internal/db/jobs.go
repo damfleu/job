@@ -131,30 +131,6 @@ func (d *DB) Delete(key string) error {
 	return nil
 }
 
-func (d *DB) GetLastKey() (string, error) {
-	var key string
-	err := d.db.QueryRow(`SELECT value FROM metadata WHERE key = 'last_key'`).Scan(&key)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("db: get last key: %w", err)
-	}
-	return key, nil
-}
-
-func (d *DB) SetLastKey(key string) error {
-	_, err := d.db.Exec(
-		`INSERT INTO metadata(key, value) VALUES('last_key', ?)
-		 ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-		key,
-	)
-	if err != nil {
-		return fmt.Errorf("db: set last key: %w", err)
-	}
-	return nil
-}
-
 // scanJob scans a single row into a Job.
 func scanJob(s interface{ Scan(...any) error }) (*model.Job, error) {
 	var (

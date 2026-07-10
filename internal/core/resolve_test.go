@@ -64,8 +64,10 @@ func (f *fakeStore) FindByKeyPrefix(prefix string) ([]*model.Job, error) {
 	return out, nil
 }
 
-func (f *fakeStore) GetLastKey() (string, error) { return f.lastKey, nil }
 func (f *fakeStore) GetLastKeyForContext(context string) (string, error) {
+	if context == "" {
+		return f.lastKey, nil
+	}
 	for _, j := range f.jobs {
 		if j.Context == context {
 			return j.Key, nil
@@ -85,7 +87,6 @@ func (f *fakeStore) GetLastKeyByStatus(status model.Status, context string) (str
 	}
 	return "", nil
 }
-func (f *fakeStore) SetLastKey(key string) error { f.lastKey = key; return nil }
 func (f *fakeStore) Insert(job *model.Job) error         { return nil }
 func (f *fakeStore) Update(job *model.Job) error         { return nil }
 func (f *fakeStore) Delete(key string) error             { return nil }
@@ -224,7 +225,7 @@ func TestResolveDotInContext(t *testing.T) {
 	projectB.Context = "projectB"
 	store := &fakeStore{jobs: []*model.Job{projectA, projectB}, lastKey: "key_b"}
 
-	// --here with context "projectA" should return key_a, not the global last key (key_b)
+	// scoping to context "projectA" should return key_a, not the global last key (key_b)
 	j, err := ResolveKey(store, ".", "projectA")
 	require.NoError(t, err)
 	assert.Equal(t, "key_a", j.Key)

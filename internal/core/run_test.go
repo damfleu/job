@@ -28,7 +28,7 @@ func TestForegroundSuccess(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 0, exitCode)
 
-	key, err := store.GetLastKey()
+	key, err := store.GetLastKeyForContext("")
 	require.NoError(t, err)
 	require.NotEmpty(t, key)
 
@@ -49,7 +49,7 @@ func TestForegroundNonZeroExit(t *testing.T) {
 	require.NoError(t, err) // non-zero exit is not an infra error
 	assert.Equal(t, 1, exitCode)
 
-	key, _ := store.GetLastKey()
+	key, _ := store.GetLastKeyForContext("")
 	j, err := store.Get(key)
 	require.NoError(t, err)
 	assert.Equal(t, model.StatusCompleted, j.Status)
@@ -63,7 +63,7 @@ func TestForegroundLogFile(t *testing.T) {
 	_, err := CreateAndRunForeground(store, stateDir, []string{"echo", "hello from job"}, RunOptions{})
 	require.NoError(t, err)
 
-	key, _ := store.GetLastKey()
+	key, _ := store.GetLastKeyForContext("")
 	j, err := store.Get(key)
 	require.NoError(t, err)
 
@@ -78,10 +78,26 @@ func TestForegroundAlias(t *testing.T) {
 	_, err := CreateAndRunForeground(store, stateDir, []string{"echo", "hi"}, RunOptions{Alias: "myalias"})
 	require.NoError(t, err)
 
-	key, _ := store.GetLastKey()
+	key, _ := store.GetLastKeyForContext("")
 	j, err := store.Get(key)
 	require.NoError(t, err)
 	assert.Equal(t, "myalias", j.Alias)
+}
+
+func TestForegroundAutomatedDoesNotBecomeDot(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	_, err := CreateAndRunForeground(store, stateDir, []string{"echo", "human"}, RunOptions{})
+	require.NoError(t, err)
+	humanKey, err := store.GetLastKeyForContext("")
+	require.NoError(t, err)
+
+	_, err = CreateAndRunForeground(store, stateDir, []string{"echo", "automated"}, RunOptions{Automated: true})
+	require.NoError(t, err)
+
+	key, err := store.GetLastKeyForContext("")
+	require.NoError(t, err)
+	assert.Equal(t, humanKey, key, "automated job must not become the recency target")
 }
 
 func TestForegroundRecordsMetadata(t *testing.T) {
@@ -90,7 +106,7 @@ func TestForegroundRecordsMetadata(t *testing.T) {
 	_, err := CreateAndRunForeground(store, stateDir, []string{"echo", "hi"}, RunOptions{})
 	require.NoError(t, err)
 
-	key, _ := store.GetLastKey()
+	key, _ := store.GetLastKeyForContext("")
 	j, err := store.Get(key)
 	require.NoError(t, err)
 	assert.NotEmpty(t, j.Hostname)

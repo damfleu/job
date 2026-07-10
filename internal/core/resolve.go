@@ -31,10 +31,7 @@ var statusNouns = map[model.Status]string{
 //  5. Prefix match on key
 func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	if input == "." {
-		if ctx != "" {
-			return resolveDotInContext(store, ctx)
-		}
-		return resolveDot(store)
+		return resolveDotInContext(store, ctx)
 	}
 
 	if status, ok := statusSymbols[input]; ok {
@@ -51,7 +48,7 @@ func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	}
 
 	// exact alias
-	job, err = store.FindByAlias(input, "")
+	job, err = store.FindByAlias(input, ctx)
 	if err == nil {
 		return job, nil
 	}
@@ -85,24 +82,16 @@ func ResolveKey(store db.JobStore, input, ctx string) (*model.Job, error) {
 	return nil, fmt.Errorf("no job matching %q", input)
 }
 
-func resolveDot(store db.JobStore) (*model.Job, error) {
-	key, err := store.GetLastKey()
-	if err != nil {
-		return nil, err
-	}
-	if key == "" {
-		return nil, errors.New("no jobs have been run yet")
-	}
-	return store.Get(key)
-}
-
 func resolveDotInContext(store db.JobStore, ctx string) (*model.Job, error) {
 	key, err := store.GetLastKeyForContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if key == "" {
-		return nil, fmt.Errorf("no jobs in current context %q", ctx)
+		if ctx != "" {
+			return nil, fmt.Errorf("no jobs in current context %q", ctx)
+		}
+		return nil, errors.New("no jobs have been run yet")
 	}
 	return store.Get(key)
 }
@@ -135,8 +124,5 @@ func ResolveDefault(store db.JobStore, ctx string, status model.Status) (*model.
 	if key != "" {
 		return store.Get(key)
 	}
-	if ctx != "" {
-		return resolveDotInContext(store, ctx)
-	}
-	return resolveDot(store)
+	return resolveDotInContext(store, ctx)
 }

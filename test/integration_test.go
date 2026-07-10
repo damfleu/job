@@ -123,7 +123,7 @@ func (h *harness) waitFor(key string, status model.Status) {
 // lastJob returns the most recently started job from the DB.
 func (h *harness) lastJob() *model.Job {
 	h.t.Helper()
-	key, err := h.db.GetLastKey()
+	key, err := h.db.GetLastKeyForContext("")
 	require.NoError(h.t, err)
 	require.NotEmpty(h.t, key)
 	j, err := h.db.Get(key)
