@@ -30,6 +30,14 @@ var rmCmd = &cobra.Command{
 		if len(seqs) > 0 {
 			return fmt.Errorf("job %s is referenced by sequence(s): %s", j.Key, strings.Join(seqs, ", "))
 		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "About to delete %s and its log file:\n\n  %s\n\n", j.Key, displayCmd(j.Command))
+		approved, err := confirmDestructive(cmd, rmYes)
+		if err != nil {
+			return err
+		}
+		if !approved {
+			return nil
+		}
 		if err := core.DeleteJob(globalDB, j); err != nil {
 			return err
 		}
@@ -37,6 +45,8 @@ var rmCmd = &cobra.Command{
 		return nil
 	},
 }
+
+var rmYes bool
 
 func printDeleted(cmd *cobra.Command, key, logFile string) {
 	fmt.Fprintf(cmd.OutOrStdout(), "removed %s\n", key)
@@ -48,5 +58,6 @@ func printDeleted(cmd *cobra.Command, key, logFile string) {
 func init() {
 	addAnyFlag(rmCmd)
 	addSelectFlag(rmCmd)
+	rmCmd.Flags().BoolVarP(&rmYes, "yes", "y", false, "delete without prompting")
 	rootCmd.AddCommand(rmCmd)
 }

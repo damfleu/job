@@ -36,13 +36,26 @@ func TestJobRemove(t *testing.T) {
 	logFile := j.LogFile
 	require.NotEmpty(t, logFile)
 
-	h.run("remove", j.Key)
+	h.run("remove", "--yes", j.Key)
 
 	_, err := h.db.Get(j.Key)
 	assert.ErrorIs(t, err, db.ErrNotFound)
 
 	_, err = os.Stat(logFile)
 	assert.True(t, os.IsNotExist(err), "log file should be deleted after remove")
+}
+
+func TestJobRemoveRequiresConfirmationOutsideTerminal(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "bye")
+	j := h.lastJob()
+
+	r := h.run("remove", j.Key)
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "confirmation requires a terminal")
+
+	_, err := h.db.Get(j.Key)
+	assert.NoError(t, err, "job should remain when removal is not approved")
 }
 
 func TestJobAlias(t *testing.T) {
@@ -67,7 +80,7 @@ func TestPruneOlderThan(t *testing.T) {
 	require.Len(t, jobs, 2)
 	logFiles := []string{jobs[0].LogFile, jobs[1].LogFile}
 
-	r := h.run("prune", "--older-than", "0s")
+	r := h.run("prune", "--yes", "--older-than", "0s")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "pruned 2 job(s)")
 
@@ -81,6 +94,20 @@ func TestPruneOlderThan(t *testing.T) {
 	}
 }
 
+func TestPruneRequiresConfirmationOutsideTerminal(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "one")
+	j := h.lastJob()
+
+	r := h.run("prune", "--older-than", "0s")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "About to delete 1 completed job(s)")
+	assert.Contains(t, r.stderr, "confirmation requires a terminal")
+
+	_, err := h.db.Get(j.Key)
+	assert.NoError(t, err, "job should remain when pruning is not approved")
+}
+
 func TestPruneBefore(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "echo", "first")
@@ -88,7 +115,7 @@ func TestPruneBefore(t *testing.T) {
 	h.run("run", "-f", "echo", "second")
 	j2 := h.lastJob()
 
-	r := h.run("prune", "--before", j2.Key)
+	r := h.run("prune", "--yes", "--before", j2.Key)
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "pruned 1 job(s)")
 

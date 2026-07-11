@@ -168,7 +168,7 @@ func TestPruneSkipsJobsInSequence(t *testing.T) {
 	h.run("sequence", "save", "prune-seq", keyA)
 
 	// Pruning with keyB as cutoff would include keyA, but it's in a sequence.
-	r := h.run("prune", "--before", keyB)
+	r := h.run("prune", "--yes", "--before", keyB)
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stderr, "referenced by sequence")
 
@@ -178,7 +178,7 @@ func TestPruneSkipsJobsInSequence(t *testing.T) {
 	// After removing the sequence, pruning should remove keyA.
 	h.run("sequence", "rm", "prune-seq")
 
-	r = h.run("prune", "--before", keyB)
+	r = h.run("prune", "--yes", "--before", keyB)
 	assert.Equal(t, 0, r.exitCode)
 
 	_, err = h.db.Get(keyA)
@@ -191,13 +191,13 @@ func TestRmRefusesJobInSequence(t *testing.T) {
 	keyA := runFg(h, "echo", "step-a")
 	h.run("sequence", "save", "rm-seq", keyA)
 
-	r := h.run("remove", keyA)
+	r := h.run("remove", "--yes", keyA)
 	assert.NotEqual(t, 0, r.exitCode)
 	assert.Contains(t, r.stderr, "referenced by sequence")
 
 	// After removing the sequence, rm should work.
 	h.run("sequence", "rm", "rm-seq")
-	r = h.run("remove", keyA)
+	r = h.run("remove", "--yes", keyA)
 	assert.Equal(t, 0, r.exitCode)
 }
 

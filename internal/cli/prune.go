@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"job/internal/core"
+	"job/internal/model"
 )
 
 var pruneCmd = &cobra.Command{
@@ -20,6 +21,7 @@ var pruneCmd = &cobra.Command{
 var (
 	pruneOlderThan string
 	pruneBefore    string
+	pruneYes       bool
 )
 
 func init() {
@@ -28,6 +30,7 @@ func init() {
 	pruneCmd.MarkFlagsMutuallyExclusive("older-than", "before")
 	pruneCmd.MarkFlagsOneRequired("older-than", "before")
 	addAnyFlag(pruneCmd)
+	pruneCmd.Flags().BoolVarP(&pruneYes, "yes", "y", false, "delete without prompting")
 	rootCmd.AddCommand(pruneCmd)
 }
 
@@ -56,7 +59,8 @@ func runPrune(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	pruned, skipped := 0, 0
+	deletable := make([]*model.Job, 0, len(jobs))
+	skipped := 0
 	for _, j := range jobs {
 		// Prevent deleting jobs that are referenced by sequences so that sequences remain runnable.
 		seqs, err := globalDB.SequencesForJob(j.Key)
@@ -68,6 +72,22 @@ func runPrune(cmd *cobra.Command, args []string) error {
 			skipped++
 			continue
 		}
+		deletable = append(deletable, j)
+	}
+
+	if len(deletable) > 0 {
+		printPrunePreview(cmd, deletable)
+		approved, err := confirmDestructive(cmd, pruneYes)
+		if err != nil {
+			return err
+		}
+		if !approved {
+			return nil
+		}
+	}
+
+	pruned := 0
+	for _, j := range deletable {
 		if err := core.DeleteJob(globalDB, j); err != nil {
 			return fmt.Errorf("deleting %s: %w", j.Key, err)
 		}
@@ -80,6 +100,21 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(cmd.OutOrStdout(), "pruned %d job(s)\n", pruned)
 	}
 	return nil
+}
+
+const prunePreviewLimit = 20
+
+func printPrunePreview(cmd *cobra.Command, jobs []*model.Job) {
+	w := cmd.ErrOrStderr()
+	fmt.Fprintf(w, "About to delete %d completed job(s) and their log files:\n\n", len(jobs))
+	limit := min(len(jobs), prunePreviewLimit)
+	for _, j := range jobs[:limit] {
+		fmt.Fprintf(w, "  %-36s  %s\n", j.Key, displayCmd(j.Command))
+	}
+	if remaining := len(jobs) - limit; remaining > 0 {
+		fmt.Fprintf(w, "  ... and %d more\n", remaining)
+	}
+	fmt.Fprintln(w)
 }
 
 // parseDuration extends time.ParseDuration with support for days (d) and weeks (w).
