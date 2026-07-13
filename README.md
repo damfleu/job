@@ -138,7 +138,7 @@ Config file: `$XDG_CONFIG_HOME/job/config.toml` (override with `$JOB_CONFIG_DIR`
 
 ```toml
 [list]
-# Default max completed jobs shown by 'job list'
+# Default max completed jobs shown by 'job list' (0 means unlimited)
 limit = 20
 
 [context]

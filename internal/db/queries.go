@@ -54,6 +54,9 @@ func (d *DB) ListCompletedByContextRegex(limit int, filter, contextRegex string)
 }
 
 func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex bool) ([]*model.Job, error) {
+	if limit < 0 {
+		return nil, fmt.Errorf("db: list completed: limit cannot be negative")
+	}
 	query := `SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed'`
 	args := []any{}
 	if filter != "" {
@@ -68,8 +71,11 @@ func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex boo
 		}
 		args = append(args, context)
 	}
-	query += ` ORDER BY stopped_at DESC LIMIT ?`
-	args = append(args, limit)
+	query += ` ORDER BY stopped_at DESC`
+	if limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, limit)
+	}
 	rows, err := d.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("db: list completed: %w", err)

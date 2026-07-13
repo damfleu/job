@@ -18,8 +18,8 @@ func TestJobShow(t *testing.T) {
 	r := h.run("show")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "echo show test") // command
-	assert.Contains(t, r.stdout, "completed")       // status
-	assert.Contains(t, r.stdout, "exited")          // reason
+	assert.Contains(t, r.stdout, "completed")      // status
+	assert.Contains(t, r.stdout, "exited")         // reason
 	assert.Contains(t, r.stdout, "Exit code:")
 	assert.Contains(t, r.stdout, "WorkDir:")
 	assert.Contains(t, r.stdout, "Duration:")
@@ -78,6 +78,14 @@ func TestJobListLimit(t *testing.T) {
 	r := h.run("list", "-n", "3")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Equal(t, 3, strings.Count(r.stdout, "echo job"))
+
+	r = h.run("list", "-n", "0")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Equal(t, 5, strings.Count(r.stdout, "echo job"))
+
+	r = h.run("list", "-n", "-1")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "limit cannot be negative")
 }
 
 func TestJobListInvalidFilter(t *testing.T) {

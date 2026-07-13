@@ -181,6 +181,13 @@ func TestListCompleted(t *testing.T) {
 	limited, err := db.ListCompleted(2, "", "")
 	require.NoError(t, err)
 	assert.Len(t, limited, 2)
+
+	unlimited, err := db.ListCompleted(0, "", "")
+	require.NoError(t, err)
+	assert.Len(t, unlimited, 3)
+
+	_, err = db.ListCompleted(-1, "", "")
+	assert.ErrorContains(t, err, "limit cannot be negative")
 }
 
 func TestListDepFailed(t *testing.T) {

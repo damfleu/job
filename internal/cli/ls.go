@@ -51,6 +51,9 @@ var lsCmd = &cobra.Command{
 		if !cmd.Flags().Changed("limit") {
 			limit = globalConfig.List.Limit
 		}
+		if limit < 0 {
+			return fmt.Errorf("limit cannot be negative")
+		}
 
 		context := ""
 		listActive := globalDB.ListActive
@@ -119,7 +122,7 @@ func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
 	lsCmd.Flags().StringVar(&lsContextFilter, "context", "", "filter by context regex")
-	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show")
+	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show; 0 means unlimited")
 	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "output as JSON")
 	addAnyFlag(lsCmd)
 	lsCmd.MarkFlagsMutuallyExclusive("any", "context")
@@ -374,8 +377,6 @@ func displayContext(j *model.Job) string {
 func displayCmd(cmd []string) string {
 	return ellipsisTrunc(strings.Join(cmd, " "), 60)
 }
-
-
 
 func displayExitCode(j *model.Job) string {
 	if j.ExitCode == nil {
