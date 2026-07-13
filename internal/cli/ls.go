@@ -23,6 +23,7 @@ var (
 	lsAll           bool
 	lsFilter        string
 	lsContextFilter string
+	lsOlderThan     string
 	lsLimit         int
 	lsJSON          bool
 	lsKeys          bool
@@ -56,6 +57,19 @@ var lsCmd = &cobra.Command{
 			return fmt.Errorf("limit cannot be negative")
 		}
 
+		var stoppedBefore *time.Time
+		if lsOlderThan != "" {
+			d, err := parseDuration(lsOlderThan)
+			if err != nil {
+				return fmt.Errorf("--older-than: %w", err)
+			}
+			if d < 0 {
+				return fmt.Errorf("--older-than cannot be negative")
+			}
+			cutoff := time.Now().UTC().Add(-d)
+			stoppedBefore = &cutoff
+		}
+
 		context := ""
 		listActive := globalDB.ListActive
 		listCompleted := globalDB.ListCompleted
@@ -67,10 +81,25 @@ var lsCmd = &cobra.Command{
 			resolveCtx()
 			context = hereCtx
 		}
+		if stoppedBefore != nil {
+			if cmd.Flags().Changed("context") {
+				listCompleted = func(limit int, filter, context string) ([]*model.Job, error) {
+					return globalDB.ListCompletedBeforeByContextRegex(*stoppedBefore, limit, filter, context)
+				}
+			} else {
+				listCompleted = func(limit int, filter, context string) ([]*model.Job, error) {
+					return globalDB.ListCompletedBefore(*stoppedBefore, limit, filter, context)
+				}
+			}
+		}
 
-		active, err := listActive(lsFilter, context)
-		if err != nil {
-			return err
+		var active []*model.Job
+		if stoppedBefore == nil {
+			var err error
+			active, err = listActive(lsFilter, context)
+			if err != nil {
+				return err
+			}
 		}
 
 		jobs := active
@@ -124,6 +153,7 @@ func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
 	lsCmd.Flags().StringVar(&lsContextFilter, "context", "", "filter by context regex")
+	lsCmd.Flags().StringVar(&lsOlderThan, "older-than", "", "show completed jobs older than duration (e.g. 30d, 2w, 24h)")
 	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show; 0 means unlimited")
 	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "output as JSON")
 	lsCmd.Flags().BoolVar(&lsKeys, "keys", false, "output full job keys, one per line")

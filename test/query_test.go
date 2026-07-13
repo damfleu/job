@@ -137,6 +137,56 @@ func TestJobListKeysUsesNormalSelection(t *testing.T) {
 	h.run("stop", runningKey)
 }
 
+func TestJobListOlderThanFiltersCompletedJobs(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "keep-completed")
+	completed := h.lastJob()
+	h.run("run", "-f", "echo", "drop-completed")
+
+	run := h.run("run", "sleep", "60")
+	runningKey := strings.TrimSpace(run.stderr)
+	require.NotEmpty(t, runningKey)
+	h.waitFor(runningKey, model.StatusRunning)
+
+	r := h.run("list", "--older-than", "0s", "--filter", "keep", "--keys", "-n", "0")
+	assert.Equal(t, 0, r.exitCode, "stderr: %s", r.stderr)
+	assert.Equal(t, completed.Key+"\n", r.stdout)
+
+	h.run("stop", runningKey)
+}
+
+func TestJobListOlderThanRejectsInvalidDuration(t *testing.T) {
+	h := newHarness(t)
+
+	r := h.run("list", "--older-than", "later")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "invalid duration")
+
+	r = h.run("list", "--older-than", "-1h")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "cannot be negative")
+}
+
+func TestJobListOlderThanCombinesWithContextRegex(t *testing.T) {
+	h := newHarness(t)
+	base := t.TempDir()
+	claude := filepath.Join(base, "claude-session")
+	terminal := filepath.Join(base, "terminal")
+	for _, dir := range []string{claude, terminal} {
+		require.NoError(t, os.Mkdir(dir, 0o755))
+	}
+
+	script := h.writeScript("basename \"$PWD\"")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+	h.runFrom(claude, "run", "-f", "echo", "from-claude")
+	claudeJob := h.lastJob()
+	h.runFrom(terminal, "run", "-f", "echo", "from-terminal")
+
+	r := h.runFrom(terminal, "list", "--context", `^claude-`, "--older-than", "0s", "--keys", "-n", "0")
+	assert.Equal(t, 0, r.exitCode, "stderr: %s", r.stderr)
+	assert.Equal(t, claudeJob.Key+"\n", r.stdout)
+}
+
 func TestListDefaultScopedToContext(t *testing.T) {
 	h := newHarness(t)
 	dirA := t.TempDir()
