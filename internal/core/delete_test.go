@@ -65,3 +65,24 @@ func TestDeleteJobMissingLogFileIsOK(t *testing.T) {
 	_, err := store.Get(j.Key)
 	assert.ErrorIs(t, err, db.ErrNotFound)
 }
+
+func TestDeleteJobRejectsIncompleteJobs(t *testing.T) {
+	for _, status := range []model.Status{
+		model.StatusPending,
+		model.StatusBlocked,
+		model.StatusRunning,
+	} {
+		t.Run(string(status), func(t *testing.T) {
+			store, _ := setupRun(t)
+			j := completedJobWithLog(t, store, "")
+			j.Status = status
+
+			err := DeleteJob(store, j)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "is not completed")
+
+			_, getErr := store.Get(j.Key)
+			assert.NoError(t, getErr, "job should remain after rejected deletion")
+		})
+	}
+}
