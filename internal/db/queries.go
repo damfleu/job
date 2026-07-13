@@ -44,16 +44,26 @@ func (d *DB) listActive(filter, context string, contextIsRegex bool) ([]*model.J
 }
 
 func (d *DB) ListCompleted(limit int, filter, context string) ([]*model.Job, error) {
-	return d.listCompleted(limit, filter, context, false)
+	return d.listCompleted(limit, filter, context, false, nil)
 }
 
 // ListCompletedByContextRegex returns completed jobs whose context matches
 // contextRegex, applying limit after both command and context filtering.
 func (d *DB) ListCompletedByContextRegex(limit int, filter, contextRegex string) ([]*model.Job, error) {
-	return d.listCompleted(limit, filter, contextRegex, true)
+	return d.listCompleted(limit, filter, contextRegex, true, nil)
 }
 
-func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex bool) ([]*model.Job, error) {
+func (d *DB) ListCompletedBefore(t time.Time, limit int, filter, context string) ([]*model.Job, error) {
+	return d.listCompleted(limit, filter, context, false, &t)
+}
+
+// ListCompletedBeforeByContextRegex returns completed jobs older than t whose
+// context matches contextRegex, applying limit after all filters.
+func (d *DB) ListCompletedBeforeByContextRegex(t time.Time, limit int, filter, contextRegex string) ([]*model.Job, error) {
+	return d.listCompleted(limit, filter, contextRegex, true, &t)
+}
+
+func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex bool, stoppedBefore *time.Time) ([]*model.Job, error) {
 	if limit < 0 {
 		return nil, fmt.Errorf("db: list completed: limit cannot be negative")
 	}
@@ -62,6 +72,10 @@ func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex boo
 	if filter != "" {
 		query += ` AND cmd_str(command) REGEXP ?`
 		args = append(args, filter)
+	}
+	if stoppedBefore != nil {
+		query += ` AND stopped_at < ?`
+		args = append(args, stoppedBefore.UTC().Format(time.RFC3339Nano))
 	}
 	if context != "" {
 		if contextIsRegex {
@@ -100,22 +114,6 @@ func (d *DB) GetByKeys(keys []string) ([]*model.Job, error) {
 	)
 	if err != nil {
 		return nil, fmt.Errorf("db: get by keys: %w", err)
-	}
-	defer rows.Close()
-	return scanJobs(rows)
-}
-
-func (d *DB) ListCompletedBefore(t time.Time, context string) ([]*model.Job, error) {
-	query := `SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed' AND stopped_at < ?`
-	args := []any{t.UTC().Format(time.RFC3339Nano)}
-	if context != "" {
-		query += ` AND context = ?`
-		args = append(args, context)
-	}
-	query += ` ORDER BY stopped_at`
-	rows, err := d.db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("db: list completed before: %w", err)
 	}
 	defer rows.Close()
 	return scanJobs(rows)

@@ -54,7 +54,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		cutoff = *j.StoppedAt
 	}
 
-	jobs, err := globalDB.ListCompletedBefore(cutoff, hereCtx)
+	jobs, err := globalDB.ListCompletedBefore(cutoff, 0, "", hereCtx)
 	if err != nil {
 		return err
 	}

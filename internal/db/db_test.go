@@ -427,11 +427,16 @@ func TestListCompletedBefore(t *testing.T) {
 	require.NoError(t, db.Insert(makeJob("active1"))) // not completed, must be excluded
 
 	cutoff := now.Add(2 * time.Hour) // old1 and old2 are before this, new1 is not
-	jobs, err := db.ListCompletedBefore(cutoff, "")
+	jobs, err := db.ListCompletedBefore(cutoff, 0, "", "")
 	require.NoError(t, err)
 	require.Len(t, jobs, 2)
 	keys := []string{jobs[0].Key, jobs[1].Key}
 	assert.ElementsMatch(t, []string{"old1", "old2"}, keys)
+
+	limited, err := db.ListCompletedBefore(cutoff, 1, "", "")
+	require.NoError(t, err)
+	require.Len(t, limited, 1)
+	assert.Equal(t, "old2", limited[0].Key)
 }
 
 func TestListActiveContext(t *testing.T) {
