@@ -58,6 +58,19 @@ func TestJobRemoveRequiresConfirmationOutsideTerminal(t *testing.T) {
 	assert.NoError(t, err, "job should remain when removal is not approved")
 }
 
+func TestJobRemoveRequiresExplicitKey(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "keep me")
+	j := h.lastJob()
+
+	r := h.run("remove", "--yes")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "accepts 1 arg(s), received 0")
+
+	_, err := h.db.Get(j.Key)
+	assert.NoError(t, err, "job should remain when no key is provided")
+}
+
 func TestJobAlias(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "-k", "mybuild", "echo", "aliased")

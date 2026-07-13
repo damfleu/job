@@ -92,7 +92,7 @@ func TestBareShowDefaultsToLastRunning(t *testing.T) {
 	h.run("stop", runningKey)
 }
 
-// TestBareRetryDefaultsToLastCompleted confirms retry/rm's bare invocation
+// TestBareRetryDefaultsToLastCompleted confirms retry's bare invocation
 // prefers the last completed job over "." (the last created job), which
 // would otherwise be the still-running job and fail retry's status check.
 func TestBareRetryDefaultsToLastCompleted(t *testing.T) {

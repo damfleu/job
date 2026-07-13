@@ -54,7 +54,7 @@ Special keys refer to jobs by recency instead of by name, scoped to the current 
 - `.` — the most recently started job, of any status
 - `+` / `_` / `=` — the most recent running / blocked / completed job (errors if none matches)
 
-You can also omit the key entirely: `job log`, `job show`, and `job stop` then default to the last running job, and `job retry`/`job rm` to the last completed job — falling back to `.` if no job of that status exists.
+You can also omit the key for `job log`, `job show`, and `job stop` to default to the last running job, and for `job retry` to default to the last completed job — falling back to `.` if no job of that status exists. `job rm` always requires an explicit key or alias.
 
 Run `job --help` or `job <command> --help` for full usage.
 

@@ -11,10 +11,10 @@ import (
 )
 
 var rmCmd = &cobra.Command{
-	Use:     "remove [key]",
+	Use:     "remove <key>",
 	Aliases: []string{"rm"},
 	Short:   "Delete a completed job",
-	Args:    cobra.MaximumNArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		j, err := resolveJobArg(cmd, args, model.StatusCompleted)
 		if err != nil {
