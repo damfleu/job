@@ -65,10 +65,48 @@ func TestJobRemoveRequiresExplicitKey(t *testing.T) {
 
 	r := h.run("remove", "--yes")
 	assert.NotEqual(t, 0, r.exitCode)
-	assert.Contains(t, r.stderr, "accepts 1 arg(s), received 0")
+	assert.Contains(t, r.stderr, "requires at least 1 arg(s)")
 
 	_, err := h.db.Get(j.Key)
 	assert.NoError(t, err, "job should remain when no key is provided")
+}
+
+func TestJobRemoveMultipleJobs(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "one")
+	one := h.lastJob()
+	h.run("run", "-f", "echo", "two")
+	two := h.lastJob()
+
+	r := h.run("remove", "--yes", one.Key, two.Key)
+	assert.Equal(t, 0, r.exitCode, "stderr: %s", r.stderr)
+	assert.Contains(t, r.stderr, "About to delete 2 completed job(s)")
+	assert.Contains(t, r.stdout, "removed "+one.Key)
+	assert.Contains(t, r.stdout, "removed "+two.Key)
+
+	_, err := h.db.Get(one.Key)
+	assert.ErrorIs(t, err, db.ErrNotFound)
+	_, err = h.db.Get(two.Key)
+	assert.ErrorIs(t, err, db.ErrNotFound)
+}
+
+func TestJobRemoveBatchPreflightPreventsPartialDeletion(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "completed")
+	completed := h.lastJob()
+
+	run := h.run("run", "sleep", "60")
+	runningKey := strings.TrimSpace(run.stderr)
+	require.NotEmpty(t, runningKey)
+	h.waitFor(runningKey, model.StatusRunning)
+
+	r := h.run("remove", "--yes", completed.Key, runningKey)
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "is not completed")
+
+	_, err := h.db.Get(completed.Key)
+	assert.NoError(t, err, "completed job should remain after batch preflight fails")
+	h.run("stop", runningKey)
 }
 
 func TestJobAlias(t *testing.T) {
