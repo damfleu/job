@@ -443,6 +443,26 @@ func TestListActiveContext(t *testing.T) {
 	assert.Equal(t, "a1", results[0].Key)
 }
 
+func TestListActiveContextRegex(t *testing.T) {
+	db := openMemDB(t)
+
+	for key, context := range map[string]string{
+		"a1": "project-session-a",
+		"a2": "project-session-b",
+		"b1": "terminal",
+		"b2": "",
+	} {
+		j := makeJob(key)
+		j.Context = context
+		require.NoError(t, db.Insert(j))
+	}
+
+	results, err := db.ListActiveByContextRegex("", `^project-`)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.ElementsMatch(t, []string{"a1", "a2"}, []string{results[0].Key, results[1].Key})
+}
+
 func TestListCompletedContext(t *testing.T) {
 	db := openMemDB(t)
 
@@ -462,6 +482,24 @@ func TestListCompletedContext(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	assert.Equal(t, "a1", results[0].Key)
+}
+
+func TestListCompletedContextRegexAppliesLimitAfterFiltering(t *testing.T) {
+	db := openMemDB(t)
+	now := time.Now().UTC()
+
+	for i, context := range []string{"project-old", "terminal", "project-new"} {
+		j := makeJob(fmt.Sprintf("job%d", i))
+		j.Status = model.StatusCompleted
+		j.Context = context
+		j.StoppedAt = new(now.Add(time.Duration(i) * time.Second).Truncate(time.Millisecond))
+		require.NoError(t, db.Insert(j))
+	}
+
+	results, err := db.ListCompletedByContextRegex(1, "", `^project-`)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "job2", results[0].Key)
 }
 
 func TestGetLastKeyForContext(t *testing.T) {

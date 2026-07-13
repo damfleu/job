@@ -87,7 +87,11 @@ Use `-a`/`-A` multiple times to specify multiple dependencies. A job whose `--af
 
 ### Context
 
-Context resolvers scope jobs to a workspace. Resolution (`.`, `+`/`_`/`=`, aliases, substring matches, and `-a`/`-A` dependency chaining) is scoped to the current context by default; pass `--any` to reach across all contexts instead. `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
+Context resolvers scope jobs to a workspace. Resolution (`.`, `+`/`_`/`=`, aliases, substring matches, and `-a`/`-A` dependency chaining) is scoped to the current context by default; pass `--any` to reach across all contexts instead.
+
+For listings, `--context <regex>` selects matching contexts across workspaces. Anchor both ends for an exact context. It can be combined with the command `--filter`.
+
+`run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 
 `contrib/context-claude.sh` scopes jobs launched by Claude Code to their own `claude-<session-id>` context, isolated from your default view. Together with the `--json` output on `show`/`list`, these are the building blocks a Claude Code skill for `job` would use.
 

@@ -11,6 +11,15 @@ import (
 )
 
 func (d *DB) ListActive(filter, context string) ([]*model.Job, error) {
+	return d.listActive(filter, context, false)
+}
+
+// ListActiveByContextRegex returns active jobs whose context matches contextRegex.
+func (d *DB) ListActiveByContextRegex(filter, contextRegex string) ([]*model.Job, error) {
+	return d.listActive(filter, contextRegex, true)
+}
+
+func (d *DB) listActive(filter, context string, contextIsRegex bool) ([]*model.Job, error) {
 	query := `SELECT ` + jobCols + ` FROM jobs WHERE status != 'completed'`
 	args := []any{}
 	if filter != "" {
@@ -18,7 +27,11 @@ func (d *DB) ListActive(filter, context string) ([]*model.Job, error) {
 		args = append(args, filter)
 	}
 	if context != "" {
-		query += ` AND context = ?`
+		if contextIsRegex {
+			query += ` AND COALESCE(context, '') REGEXP ?`
+		} else {
+			query += ` AND context = ?`
+		}
 		args = append(args, context)
 	}
 	query += ` ORDER BY created_at`
@@ -31,6 +44,16 @@ func (d *DB) ListActive(filter, context string) ([]*model.Job, error) {
 }
 
 func (d *DB) ListCompleted(limit int, filter, context string) ([]*model.Job, error) {
+	return d.listCompleted(limit, filter, context, false)
+}
+
+// ListCompletedByContextRegex returns completed jobs whose context matches
+// contextRegex, applying limit after both command and context filtering.
+func (d *DB) ListCompletedByContextRegex(limit int, filter, contextRegex string) ([]*model.Job, error) {
+	return d.listCompleted(limit, filter, contextRegex, true)
+}
+
+func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex bool) ([]*model.Job, error) {
 	query := `SELECT ` + jobCols + ` FROM jobs WHERE status = 'completed'`
 	args := []any{}
 	if filter != "" {
@@ -38,7 +61,11 @@ func (d *DB) ListCompleted(limit int, filter, context string) ([]*model.Job, err
 		args = append(args, filter)
 	}
 	if context != "" {
-		query += ` AND context = ?`
+		if contextIsRegex {
+			query += ` AND COALESCE(context, '') REGEXP ?`
+		} else {
+			query += ` AND context = ?`
+		}
 		args = append(args, context)
 	}
 	query += ` ORDER BY stopped_at DESC LIMIT ?`

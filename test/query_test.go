@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestJobShow(t *testing.T) {
@@ -123,6 +124,55 @@ func TestListAnyReachesAcrossContexts(t *testing.T) {
 	assert.Contains(t, r.stdout, "CONTEXT")
 	assert.Contains(t, r.stdout, dirA)
 	assert.Contains(t, r.stdout, dirB)
+}
+
+func TestListContextRegexReachesAcrossMatchingContexts(t *testing.T) {
+	h := newHarness(t)
+	base := t.TempDir()
+	projectA := filepath.Join(base, "project-one")
+	projectB := filepath.Join(base, "project-two")
+	terminal := filepath.Join(base, "terminal")
+	for _, dir := range []string{projectA, projectB, terminal} {
+		require.NoError(t, os.Mkdir(dir, 0o755))
+	}
+
+	script := h.writeScript("basename \"$PWD\"")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+	h.runFrom(projectA, "run", "-f", "echo", "from-project-a")
+	h.runFrom(projectB, "run", "-f", "echo", "from-project-b")
+	h.runFrom(terminal, "run", "-f", "echo", "from-terminal")
+
+	r := h.runFrom(terminal, "list", "--context", `^project-`)
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "echo from-project-a")
+	assert.Contains(t, r.stdout, "echo from-project-b")
+	assert.NotContains(t, r.stdout, "echo from-terminal")
+}
+
+func TestListContextRegexCanCombineWithCommandFilter(t *testing.T) {
+	h := newHarness(t)
+	script := h.writeScript("echo project-session")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+	h.run("run", "-f", "echo", "keep")
+	h.run("run", "-f", "printf", "drop")
+
+	r := h.run("list", "--context", `^project-`, "--filter", "keep")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "echo keep")
+	assert.NotContains(t, r.stdout, "printf drop")
+}
+
+func TestListRejectsInvalidContextRegex(t *testing.T) {
+	h := newHarness(t)
+	r := h.run("list", "--context", "a(b")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "invalid context filter")
+}
+
+func TestListRejectsContextWithAny(t *testing.T) {
+	h := newHarness(t)
+	r := h.run("list", "--context", "project", "--any")
+	assert.NotEqual(t, 0, r.exitCode)
 }
 
 func TestJobShowContext(t *testing.T) {

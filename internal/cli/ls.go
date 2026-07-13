@@ -20,20 +20,30 @@ import (
 )
 
 var (
-	lsAll    bool
-	lsFilter string
-	lsLimit  int
-	lsJSON   bool
+	lsAll           bool
+	lsFilter        string
+	lsContextFilter string
+	lsLimit         int
+	lsJSON          bool
 )
 
 var lsCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "List jobs",
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if lsFilter != "" {
 			if _, err := regexp.Compile(lsFilter); err != nil {
 				return fmt.Errorf("invalid filter: %w", err)
+			}
+		}
+		if cmd.Flags().Changed("context") {
+			if lsContextFilter == "" {
+				return fmt.Errorf("context filter cannot be empty")
+			}
+			if _, err := regexp.Compile(lsContextFilter); err != nil {
+				return fmt.Errorf("invalid context filter: %w", err)
 			}
 		}
 
@@ -42,14 +52,25 @@ var lsCmd = &cobra.Command{
 			limit = globalConfig.List.Limit
 		}
 
-		resolveCtx()
-		active, err := globalDB.ListActive(lsFilter, hereCtx)
+		context := ""
+		listActive := globalDB.ListActive
+		listCompleted := globalDB.ListCompleted
+		if cmd.Flags().Changed("context") {
+			context = lsContextFilter
+			listActive = globalDB.ListActiveByContextRegex
+			listCompleted = globalDB.ListCompletedByContextRegex
+		} else if !anyScope {
+			resolveCtx()
+			context = hereCtx
+		}
+
+		active, err := listActive(lsFilter, context)
 		if err != nil {
 			return err
 		}
 
 		if lsJSON {
-			completed, err := globalDB.ListCompleted(limit, lsFilter, hereCtx)
+			completed, err := listCompleted(limit, lsFilter, context)
 			if err != nil {
 				return err
 			}
@@ -66,10 +87,10 @@ var lsCmd = &cobra.Command{
 			var jobs []*model.Job
 			if !lsAll {
 				// fallback: completed only
-				jobs, err = globalDB.ListCompleted(limit, lsFilter, hereCtx)
+				jobs, err = listCompleted(limit, lsFilter, context)
 			} else {
 				jobs = append(active, func() []*model.Job {
-					c, _ := globalDB.ListCompleted(limit, lsFilter, hereCtx)
+					c, _ := listCompleted(limit, lsFilter, context)
 					return c
 				}()...)
 			}
@@ -97,9 +118,11 @@ var lsCmd = &cobra.Command{
 func init() {
 	lsCmd.Flags().BoolVarP(&lsAll, "all", "a", false, "include completed jobs")
 	lsCmd.Flags().StringVarP(&lsFilter, "filter", "f", "", "filter by command regex")
+	lsCmd.Flags().StringVar(&lsContextFilter, "context", "", "filter by context regex")
 	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show")
 	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "output as JSON")
 	addAnyFlag(lsCmd)
+	lsCmd.MarkFlagsMutuallyExclusive("any", "context")
 	rootCmd.AddCommand(lsCmd)
 }
 
