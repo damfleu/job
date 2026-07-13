@@ -3,7 +3,6 @@ package core
 import (
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -92,9 +91,6 @@ func (f *fakeStore) Update(job *model.Job) error                             { r
 func (f *fakeStore) Delete(key string) error                                 { return nil }
 func (f *fakeStore) ListActive(filter, context string) ([]*model.Job, error) { return nil, nil }
 func (f *fakeStore) ListCompleted(limit int, filter, context string) ([]*model.Job, error) {
-	return nil, nil
-}
-func (f *fakeStore) ListCompletedBefore(t time.Time, limit int, filter, context string) ([]*model.Job, error) {
 	return nil, nil
 }
 func (f *fakeStore) ListDepFailed() ([]*model.Job, error)             { return nil, nil }

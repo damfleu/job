@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"job/internal/db"
 	"job/internal/model"
 )
 
@@ -154,35 +153,6 @@ func TestSequenceSaveRequiresKey(t *testing.T) {
 	h := newHarness(t)
 	r := h.run("sequence", "save", "no-keys")
 	assert.NotEqual(t, 0, r.exitCode)
-}
-
-func TestPruneSkipsJobsInSequence(t *testing.T) {
-	h := newHarness(t)
-
-	// keyA is the job to protect; keyB is used as the prune cutoff.
-	keyA := runFg(h, "echo", "step-a")
-	keyB := runFg(h, "echo", "cutoff")
-	h.waitFor(keyA, model.StatusCompleted)
-	h.waitFor(keyB, model.StatusCompleted)
-
-	h.run("sequence", "save", "prune-seq", keyA)
-
-	// Pruning with keyB as cutoff would include keyA, but it's in a sequence.
-	r := h.run("prune", "--yes", "--before", keyB)
-	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stderr, "referenced by sequence")
-
-	_, err := h.db.Get(keyA)
-	require.NoError(t, err, "job should still exist")
-
-	// After removing the sequence, pruning should remove keyA.
-	h.run("sequence", "rm", "prune-seq")
-
-	r = h.run("prune", "--yes", "--before", keyB)
-	assert.Equal(t, 0, r.exitCode)
-
-	_, err = h.db.Get(keyA)
-	assert.ErrorIs(t, err, db.ErrNotFound, "job should be gone after prune")
 }
 
 func TestRmRefusesJobInSequence(t *testing.T) {

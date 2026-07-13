@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,6 +110,41 @@ func TestJobRemoveBatchPreflightPreventsPartialDeletion(t *testing.T) {
 	h.run("stop", runningKey)
 }
 
+func TestContextCleanupWithListAndRemove(t *testing.T) {
+	h := newHarness(t)
+	base := t.TempDir()
+	claudeA := filepath.Join(base, "claude-a")
+	claudeB := filepath.Join(base, "claude-b")
+	terminal := filepath.Join(base, "terminal")
+	for _, dir := range []string{claudeA, claudeB, terminal} {
+		require.NoError(t, os.Mkdir(dir, 0o755))
+	}
+
+	script := h.writeScript("basename \"$PWD\"")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", script))
+	h.runFrom(claudeA, "run", "-f", "echo", "claude-a")
+	jobA := h.lastJob()
+	h.runFrom(claudeB, "run", "-f", "echo", "claude-b")
+	jobB := h.lastJob()
+	h.runFrom(terminal, "run", "-f", "echo", "terminal")
+	terminalJob := h.lastJob()
+
+	listed := h.runFrom(terminal, "list", "--context", `^claude-`, "--older-than", "0s", "-n", "0", "--keys")
+	require.Equal(t, 0, listed.exitCode, "stderr: %s", listed.stderr)
+	keys := strings.Fields(listed.stdout)
+	require.ElementsMatch(t, []string{jobA.Key, jobB.Key}, keys)
+
+	removed := h.runFrom(terminal, append([]string{"remove", "--yes"}, keys...)...)
+	assert.Equal(t, 0, removed.exitCode, "stderr: %s", removed.stderr)
+
+	_, err := h.db.Get(jobA.Key)
+	assert.ErrorIs(t, err, db.ErrNotFound)
+	_, err = h.db.Get(jobB.Key)
+	assert.ErrorIs(t, err, db.ErrNotFound)
+	_, err = h.db.Get(terminalJob.Key)
+	assert.NoError(t, err, "non-matching context should remain")
+}
+
 func TestJobAlias(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "-k", "mybuild", "echo", "aliased")
@@ -119,68 +155,6 @@ func TestJobAlias(t *testing.T) {
 	r := h.run("show", "mybuild")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "mybuild")
-}
-
-func TestPruneOlderThan(t *testing.T) {
-	h := newHarness(t)
-	h.run("run", "-f", "echo", "one")
-	h.run("run", "-f", "echo", "two")
-
-	jobs, err := h.db.ListCompleted(10, "", "")
-	require.NoError(t, err)
-	require.Len(t, jobs, 2)
-	logFiles := []string{jobs[0].LogFile, jobs[1].LogFile}
-
-	r := h.run("prune", "--yes", "--older-than", "0s")
-	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stdout, "pruned 2 job(s)")
-
-	remaining, err := h.db.ListCompleted(10, "", "")
-	require.NoError(t, err)
-	assert.Empty(t, remaining)
-
-	for _, lf := range logFiles {
-		_, err := os.Stat(lf)
-		assert.True(t, os.IsNotExist(err), "log file %s should be deleted", lf)
-	}
-}
-
-func TestPruneRequiresConfirmationOutsideTerminal(t *testing.T) {
-	h := newHarness(t)
-	h.run("run", "-f", "echo", "one")
-	j := h.lastJob()
-
-	r := h.run("prune", "--older-than", "0s")
-	assert.NotEqual(t, 0, r.exitCode)
-	assert.Contains(t, r.stderr, "About to delete 1 completed job(s)")
-	assert.Contains(t, r.stderr, "confirmation requires a terminal")
-
-	_, err := h.db.Get(j.Key)
-	assert.NoError(t, err, "job should remain when pruning is not approved")
-}
-
-func TestPruneBefore(t *testing.T) {
-	h := newHarness(t)
-	h.run("run", "-f", "echo", "first")
-	j1 := h.lastJob()
-	h.run("run", "-f", "echo", "second")
-	j2 := h.lastJob()
-
-	r := h.run("prune", "--yes", "--before", j2.Key)
-	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stdout, "pruned 1 job(s)")
-
-	_, err := h.db.Get(j1.Key)
-	assert.ErrorIs(t, err, db.ErrNotFound, "j1 should be pruned")
-
-	_, err = h.db.Get(j2.Key)
-	assert.NoError(t, err, "j2 should remain")
-}
-
-func TestPruneRequiresFlag(t *testing.T) {
-	h := newHarness(t)
-	r := h.run("prune")
-	assert.NotEqual(t, 0, r.exitCode)
 }
 
 func TestStopBlockedJobShowsRunningDep(t *testing.T) {

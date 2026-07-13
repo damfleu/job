@@ -48,6 +48,8 @@ job log -p <key>
 job stop <key>
 # Block until a job completes, then print its key and exit code
 job wait <key>
+# Delete one or more completed jobs
+job rm <key>...
 ```
 
 Special keys refer to jobs by recency instead of by name, scoped to the current context by default (pass `--any` to reach across all contexts; see [Context](#context)):
@@ -90,6 +92,12 @@ Use `-a`/`-A` multiple times to specify multiple dependencies. A job whose `--af
 Context resolvers scope jobs to a workspace. Resolution (`.`, `+`/`_`/`=`, aliases, substring matches, and `-a`/`-A` dependency chaining) is scoped to the current context by default; pass `--any` to reach across all contexts instead.
 
 For listings, `--context <regex>` selects matching contexts across workspaces. Anchor both ends for an exact context. It can be combined with the command `--filter`.
+
+Listing results can be passed directly to `rm` for bulk cleanup:
+
+```sh
+job rm $(job list --older-than 30d -n 0 --keys)
+```
 
 `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 

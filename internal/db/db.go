@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"job/internal/model"
 
@@ -64,7 +63,6 @@ type JobStore interface {
 	Delete(key string) error
 	ListActive(filter, context string) ([]*model.Job, error)
 	ListCompleted(limit int, filter, context string) ([]*model.Job, error)
-	ListCompletedBefore(t time.Time, limit int, filter, context string) ([]*model.Job, error)
 	ListDepFailed() ([]*model.Job, error)
 	Search(query, context string) ([]*model.Job, error)
 	FindByAlias(alias, context string) (*model.Job, error)
