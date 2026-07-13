@@ -25,6 +25,7 @@ var (
 	lsContextFilter string
 	lsLimit         int
 	lsJSON          bool
+	lsKeys          bool
 )
 
 var lsCmd = &cobra.Command{
@@ -72,34 +73,35 @@ var lsCmd = &cobra.Command{
 			return err
 		}
 
-		if lsJSON {
+		jobs := active
+		if lsAll || len(active) == 0 {
 			completed, err := listCompleted(limit, lsFilter, context)
 			if err != nil {
 				return err
 			}
-			jobs := append(active, completed...)
+			if lsAll {
+				jobs = append(jobs, completed...)
+			} else {
+				jobs = completed
+			}
+		}
+
+		if lsJSON {
 			views := make([]jobView, len(jobs))
 			for i, j := range jobs {
 				views[i] = toJobView(j)
 			}
 			return printJSON(views)
 		}
+		if lsKeys {
+			for _, j := range jobs {
+				fmt.Fprintln(cmd.OutOrStdout(), j.Key)
+			}
+			return nil
+		}
 
 		// -a or no active jobs: show table
 		if lsAll || len(active) == 0 {
-			var jobs []*model.Job
-			if !lsAll {
-				// fallback: completed only
-				jobs, err = listCompleted(limit, lsFilter, context)
-			} else {
-				jobs = append(active, func() []*model.Job {
-					c, _ := listCompleted(limit, lsFilter, context)
-					return c
-				}()...)
-			}
-			if err != nil {
-				return err
-			}
 			if len(jobs) == 0 {
 				fmt.Fprintln(os.Stderr, "no jobs")
 				return nil
@@ -124,8 +126,10 @@ func init() {
 	lsCmd.Flags().StringVar(&lsContextFilter, "context", "", "filter by context regex")
 	lsCmd.Flags().IntVarP(&lsLimit, "limit", "n", config.Default().List.Limit, "max completed jobs to show; 0 means unlimited")
 	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "output as JSON")
+	lsCmd.Flags().BoolVar(&lsKeys, "keys", false, "output full job keys, one per line")
 	addAnyFlag(lsCmd)
 	lsCmd.MarkFlagsMutuallyExclusive("any", "context")
+	lsCmd.MarkFlagsMutuallyExclusive("json", "keys")
 	rootCmd.AddCommand(lsCmd)
 }
 

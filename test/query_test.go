@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"job/internal/model"
 )
 
 func TestJobShow(t *testing.T) {
@@ -92,6 +94,47 @@ func TestJobListInvalidFilter(t *testing.T) {
 	h := newHarness(t)
 	r := h.run("list", "-f", "a(b")
 	assert.NotEqual(t, 0, r.exitCode)
+}
+
+func TestJobListKeys(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "one")
+	one := h.lastJob()
+	h.run("run", "-f", "echo", "two")
+	two := h.lastJob()
+
+	r := h.run("list", "--keys")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Equal(t, two.Key+"\n"+one.Key+"\n", r.stdout)
+	assert.Empty(t, r.stderr)
+}
+
+func TestJobListKeysEmpty(t *testing.T) {
+	h := newHarness(t)
+	r := h.run("list", "--keys")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Empty(t, r.stdout)
+	assert.Empty(t, r.stderr)
+}
+
+func TestJobListKeysUsesNormalSelection(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "completed")
+	completed := h.lastJob()
+
+	run := h.run("run", "sleep", "60")
+	runningKey := strings.TrimSpace(run.stderr)
+	require.NotEmpty(t, runningKey)
+	h.waitFor(runningKey, model.StatusRunning)
+
+	r := h.run("list", "--keys")
+	assert.Equal(t, runningKey+"\n", r.stdout)
+
+	r = h.run("list", "--all", "--keys")
+	assert.Contains(t, r.stdout, runningKey+"\n")
+	assert.Contains(t, r.stdout, completed.Key+"\n")
+
+	h.run("stop", runningKey)
 }
 
 func TestListDefaultScopedToContext(t *testing.T) {
