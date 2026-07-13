@@ -101,6 +101,7 @@ func TestListDefaultScopedToContext(t *testing.T) {
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "echo from-a")
 	assert.NotContains(t, r.stdout, "echo from-b")
+	assert.NotContains(t, r.stdout, "CONTEXT")
 }
 
 func TestListAnyReachesAcrossContexts(t *testing.T) {
@@ -119,6 +120,9 @@ func TestListAnyReachesAcrossContexts(t *testing.T) {
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "echo from-a")
 	assert.Contains(t, r.stdout, "echo from-b")
+	assert.Contains(t, r.stdout, "CONTEXT")
+	assert.Contains(t, r.stdout, dirA)
+	assert.Contains(t, r.stdout, dirB)
 }
 
 func TestJobShowContext(t *testing.T) {

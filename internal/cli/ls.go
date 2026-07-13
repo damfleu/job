@@ -105,6 +105,7 @@ func init() {
 
 // renderTree builds a lipgloss tree from a set of active jobs and returns the rendered string.
 func renderTree(jobs []*model.Job) string {
+	showContext := hasMultipleContexts(jobs)
 	byKey := make(map[string]*model.Job, len(jobs))
 	for _, j := range jobs {
 		byKey[j.Key] = j
@@ -130,7 +131,7 @@ func renderTree(jobs []*model.Job) string {
 
 	var buildNode func(j *model.Job) *tree.Tree
 	buildNode = func(j *model.Job) *tree.Tree {
-		t := tree.Root(nodeLabel(j))
+		t := tree.Root(nodeLabel(j, showContext))
 		for _, kid := range children[j.Key] {
 			t.Child(buildNode(kid))
 		}
@@ -144,13 +145,17 @@ func renderTree(jobs []*model.Job) string {
 	return strings.Join(parts, "\n") + "\n"
 }
 
-func nodeLabel(j *model.Job) string {
-	return fmt.Sprintf("%s  %s  %s  %s",
+func nodeLabel(j *model.Job, showContext bool) string {
+	label := fmt.Sprintf("%s  %s  %s  %s",
 		displayKey(j),
 		jobStatusStyle(j).Render(jobStatusText(j)),
 		displayCmd(j.Command),
 		displayAge(j),
 	)
+	if showContext {
+		return fmt.Sprintf("[%s]  %s", middleEllipsisTrunc(displayContext(j), 24), label)
+	}
+	return label
 }
 
 // expandDeps augments a set of jobs with their transitive completed dependencies.
@@ -198,23 +203,33 @@ func expandDeps(d *db.DB, seed []*model.Job) ([]*model.Job, error) {
 
 func printTable(jobs []*model.Job) {
 	isTTY := term.IsTerminal(os.Stdout.Fd())
+	showContext := hasMultipleContexts(jobs)
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"KEY", "STATUS", "RC", "COMMAND", "TIME", "DURATION"})
+	header := table.Row{"KEY"}
+	if showContext {
+		header = append(header, "CONTEXT")
+	}
+	header = append(header, "STATUS", "RC", "COMMAND", "TIME", "DURATION")
+	t.AppendHeader(header)
 	for _, j := range jobs {
 		status := jobStatusText(j)
 		if isTTY {
 			status = jobStatusStyle(j).Render(status)
 		}
-		t.AppendRow(table.Row{
-			displayKeyAlias(j),
+		row := table.Row{displayKeyAlias(j)}
+		if showContext {
+			row = append(row, displayContext(j))
+		}
+		row = append(row,
 			status,
 			displayExitCode(j),
 			strings.Join(j.Command, " "),
 			displayTimestamp(j),
 			displayDuration(j),
-		})
+		)
+		t.AppendRow(row)
 	}
 
 	if !isTTY {
@@ -227,17 +242,32 @@ func printTable(jobs []*model.Job) {
 	configs := []table.ColumnConfig{
 		{Name: "RC", WidthMax: 3, WidthMin: 1},
 	}
+	if showContext {
+		configs = append(configs, table.ColumnConfig{
+			Name: "CONTEXT", WidthMax: 24, WidthMin: len("CONTEXT"), WidthMaxEnforcer: middleEllipsisTrunc,
+		})
+	}
 	// Measure natural widths of all non-COMMAND columns to give COMMAND the rest.
-	keyW, statusW, rcW, timeW, durW := len("KEY"), len("STATUS"), len("RC"), len("TIME"), len("DURATION")
+	keyW, contextW, statusW, rcW, timeW, durW := len("KEY"), 0, len("STATUS"), len("RC"), len("TIME"), len("DURATION")
 	for _, j := range jobs {
 		keyW = max(keyW, len(displayKeyAlias(j)))
+		if showContext {
+			contextW = max(contextW, min(len(displayContext(j)), 24))
+		}
 		statusW = max(statusW, len(jobStatusText(j)))
 		rcW = max(rcW, min(len(displayExitCode(j)), 3))
 		timeW = max(timeW, len(displayTimestamp(j)))
 		durW = max(durW, len(displayDuration(j)))
 	}
-	// 6 cols × 2 padding + 7 border chars (left + 5 separators + right) = 19 overhead.
-	cmdMax := termWidth - (keyW + statusW + rcW + timeW + durW + 19)
+	columnCount := 6
+	if showContext {
+		columnCount++
+		contextW = max(contextW, len("CONTEXT"))
+	}
+	// Each column has two padding characters, plus one border on each side and
+	// between columns.
+	overhead := 3*columnCount + 1
+	cmdMax := termWidth - (keyW + contextW + statusW + rcW + timeW + durW + overhead)
 	if cmdMax >= len("COMMAND") {
 		configs = append(configs, table.ColumnConfig{
 			Name: "COMMAND", WidthMax: cmdMax, WidthMaxEnforcer: ellipsisTrunc,
@@ -256,6 +286,33 @@ func ellipsisTrunc(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// middleEllipsisTrunc preserves both ends of identifiers such as paths and
+// session IDs, which often differ near the end.
+func middleEllipsisTrunc(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	left := (maxLen - 3 + 1) / 2
+	right := maxLen - 3 - left
+	return s[:left] + "..." + s[len(s)-right:]
+}
+
+func hasMultipleContexts(jobs []*model.Job) bool {
+	if len(jobs) < 2 {
+		return false
+	}
+	context := jobs[0].Context
+	for _, j := range jobs[1:] {
+		if j.Context != context {
+			return true
+		}
+	}
+	return false
 }
 
 func jobTableStyle() table.Style {
@@ -282,6 +339,13 @@ func displayKeyAlias(j *model.Job) string {
 		return j.Alias
 	}
 	return j.Key
+}
+
+func displayContext(j *model.Job) string {
+	if j.Context == "" {
+		return "-"
+	}
+	return j.Context
 }
 
 func displayCmd(cmd []string) string {

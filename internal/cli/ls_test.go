@@ -74,6 +74,45 @@ func TestJobStatusText(t *testing.T) {
 	}
 }
 
+func TestHasMultipleContexts(t *testing.T) {
+	tests := []struct {
+		name string
+		jobs []*model.Job
+		want bool
+	}{
+		{name: "empty", jobs: nil, want: false},
+		{name: "one", jobs: []*model.Job{{Context: "one"}}, want: false},
+		{name: "same", jobs: []*model.Job{{Context: "one"}, {Context: "one"}}, want: false},
+		{name: "different", jobs: []*model.Job{{Context: "one"}, {Context: "two"}}, want: true},
+		{name: "empty and non-empty", jobs: []*model.Job{{Context: ""}, {Context: "two"}}, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, hasMultipleContexts(tt.jobs))
+		})
+	}
+}
+
+func TestRenderTreeShowsContextOnlyForMixedContexts(t *testing.T) {
+	one := makeTestJob("one", model.StatusRunning)
+	one.Context = "project-a"
+	two := makeTestJob("two", model.StatusRunning)
+	two.Context = "project-b"
+
+	single := renderTree([]*model.Job{one})
+	assert.NotContains(t, single, "[project-a]")
+
+	mixed := renderTree([]*model.Job{one, two})
+	assert.Contains(t, mixed, "[project-a]")
+	assert.Contains(t, mixed, "[project-b]")
+}
+
+func TestMiddleEllipsisTrunc(t *testing.T) {
+	assert.Equal(t, "short", middleEllipsisTrunc("short", 10))
+	assert.Equal(t, "abc...hij", middleEllipsisTrunc("abcdefghij", 9))
+}
+
 func TestExpandDepsNoDeps(t *testing.T) {
 	d := openTestDB(t)
 	running := makeTestJob("run1", model.StatusRunning)
