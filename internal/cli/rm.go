@@ -2,8 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
 	"job/internal/core"
@@ -11,11 +14,20 @@ import (
 )
 
 var rmCmd = &cobra.Command{
-	Use:     "remove <key>...",
+	Use:     "remove [<key>...]",
 	Aliases: []string{"rm"},
 	Short:   "Delete completed jobs",
-	Args:    cobra.MinimumNArgs(1),
+	Long: "Delete completed jobs. With no key arguments, read whitespace-separated " +
+		"job keys from stdin.",
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		args, err := removeArgs(cmd, args)
+		if err != nil {
+			return err
+		}
+		if len(args) == 0 {
+			return nil
+		}
 		jobs, err := resolveRemoveJobs(cmd, args)
 		if err != nil {
 			return err
@@ -39,6 +51,23 @@ var rmCmd = &cobra.Command{
 }
 
 var rmYes bool
+
+func removeArgs(cmd *cobra.Command, args []string) ([]string, error) {
+	if len(args) > 0 {
+		return args, nil
+	}
+
+	stdin := cmd.InOrStdin()
+	if f, ok := stdin.(*os.File); ok && term.IsTerminal(f.Fd()) {
+		return nil, fmt.Errorf("provide at least one job key or pipe whitespace-separated keys on stdin")
+	}
+
+	input, err := io.ReadAll(stdin)
+	if err != nil {
+		return nil, fmt.Errorf("reading job keys from stdin: %w", err)
+	}
+	return strings.Fields(string(input)), nil
+}
 
 func resolveRemoveJobs(cmd *cobra.Command, args []string) ([]*model.Job, error) {
 	jobs := make([]*model.Job, 0, len(args))

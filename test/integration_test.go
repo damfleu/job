@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"errors"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -86,10 +87,23 @@ func (h *harness) run(args ...string) result {
 	return h.runFrom("", args...)
 }
 
+func (h *harness) runWithStdin(stdin string, args ...string) result {
+	return h.runCommand("", bytes.NewBufferString(stdin), args...)
+}
+
+func (h *harness) runFromWithStdin(dir, stdin string, args ...string) result {
+	return h.runCommand(dir, bytes.NewBufferString(stdin), args...)
+}
+
 func (h *harness) runFrom(dir string, args ...string) result {
+	return h.runCommand(dir, nil, args...)
+}
+
+func (h *harness) runCommand(dir string, stdin io.Reader, args ...string) result {
 	h.t.Helper()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
+	cmd.Stdin = stdin
 	if dir != "" {
 		cmd.Dir = dir
 	}

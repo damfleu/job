@@ -59,17 +59,54 @@ func TestJobRemoveRequiresConfirmationOutsideTerminal(t *testing.T) {
 	assert.NoError(t, err, "job should remain when removal is not approved")
 }
 
-func TestJobRemoveRequiresExplicitKey(t *testing.T) {
+func TestJobRemoveEmptyStdinIsNoOp(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "echo", "keep me")
 	j := h.lastJob()
 
-	r := h.run("remove", "--yes")
-	assert.NotEqual(t, 0, r.exitCode)
-	assert.Contains(t, r.stderr, "requires at least 1 arg(s)")
+	r := h.runWithStdin(" \n\t", "remove", "--yes")
+	assert.Equal(t, 0, r.exitCode, "stderr: %s", r.stderr)
+	assert.Empty(t, r.stdout)
+	assert.Empty(t, r.stderr)
 
 	_, err := h.db.Get(j.Key)
-	assert.NoError(t, err, "job should remain when no key is provided")
+	assert.NoError(t, err, "job should remain when stdin contains no keys")
+}
+
+func TestJobRemoveReadsWhitespaceSeparatedKeysFromStdin(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "one")
+	one := h.lastJob()
+	h.run("run", "-f", "echo", "two")
+	two := h.lastJob()
+	h.run("run", "-f", "echo", "three")
+	three := h.lastJob()
+
+	input := one.Key + "  " + two.Key + "\n\t" + three.Key + "\n"
+	r := h.runWithStdin(input, "remove", "--yes")
+	assert.Equal(t, 0, r.exitCode, "stderr: %s", r.stderr)
+	assert.Contains(t, r.stderr, "About to delete 3 completed job(s)")
+	assert.Contains(t, r.stdout, "removed "+one.Key)
+	assert.Contains(t, r.stdout, "removed "+two.Key)
+	assert.Contains(t, r.stdout, "removed "+three.Key)
+
+	for _, key := range []string{one.Key, two.Key, three.Key} {
+		_, err := h.db.Get(key)
+		assert.ErrorIs(t, err, db.ErrNotFound)
+	}
+}
+
+func TestJobRemoveFromStdinRequiresConfirmationOutsideTerminal(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "echo", "keep me")
+	j := h.lastJob()
+
+	r := h.runWithStdin(j.Key+"\n", "remove")
+	assert.NotEqual(t, 0, r.exitCode)
+	assert.Contains(t, r.stderr, "confirmation requires a terminal")
+
+	_, err := h.db.Get(j.Key)
+	assert.NoError(t, err, "job should remain when piped removal is not approved")
 }
 
 func TestJobRemoveMultipleJobs(t *testing.T) {
@@ -134,7 +171,7 @@ func TestContextCleanupWithListAndRemove(t *testing.T) {
 	keys := strings.Fields(listed.stdout)
 	require.ElementsMatch(t, []string{jobA.Key, jobB.Key}, keys)
 
-	removed := h.runFrom(terminal, append([]string{"remove", "--yes"}, keys...)...)
+	removed := h.runFromWithStdin(terminal, listed.stdout, "remove", "--yes")
 	assert.Equal(t, 0, removed.exitCode, "stderr: %s", removed.stderr)
 
 	_, err := h.db.Get(jobA.Key)

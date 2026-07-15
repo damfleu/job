@@ -56,7 +56,7 @@ Special keys refer to jobs by recency instead of by name, scoped to the current 
 - `.` — the most recently started job, of any status
 - `+` / `_` / `=` — the most recent running / blocked / completed job (errors if none matches)
 
-You can also omit the key for `job log`, `job show`, and `job stop` to default to the last running job, and for `job retry` to default to the last completed job — falling back to `.` if no job of that status exists. `job rm` always requires an explicit key or alias.
+You can also omit the key for `job log`, `job show`, and `job stop` to default to the last running job, and for `job retry` to default to the last completed job — falling back to `.` if no job of that status exists. `job rm` accepts explicit key or alias arguments; with no arguments, it reads whitespace-separated job keys from stdin.
 
 Run `job --help` or `job <command> --help` for full usage.
 
@@ -96,8 +96,10 @@ For listings, `--context <regex>` selects matching contexts across workspaces. A
 Listing results can be passed directly to `rm` for bulk cleanup:
 
 ```sh
-job rm $(job list --older-than 30d -n 0 --keys)
+job list --older-than 30d -n 0 --keys | job rm --yes
 ```
+
+Spaces, tabs, and newlines all separate keys on stdin. `--yes` is required because piped stdin cannot be used for interactive confirmation.
 
 `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 
