@@ -3,12 +3,36 @@ package cli
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"job/internal/model"
 )
+
+func TestResolveJobArgInteractiveScopesExactAliasToContext(t *testing.T) {
+	d := openTestDB(t)
+	previousDB := globalDB
+	globalDB = d
+	t.Cleanup(func() { globalDB = previousDB })
+
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	inContext := makeTestJob("project-a-build", model.StatusRunning)
+	inContext.Alias = "build"
+	inContext.Context = "projectA"
+	inContext.CreatedAt = now.Add(-time.Minute)
+	outOfContext := makeTestJob("project-b-build", model.StatusRunning)
+	outOfContext.Alias = "build"
+	outOfContext.Context = "projectB"
+	outOfContext.CreatedAt = now
+	require.NoError(t, d.Insert(inContext))
+	require.NoError(t, d.Insert(outOfContext))
+
+	got, err := resolveJobArgInteractive("build", "projectA")
+	require.NoError(t, err)
+	assert.Equal(t, inContext.Key, got.Key)
+}
 
 func TestCandidatesForQuery(t *testing.T) {
 	d := openTestDB(t)
