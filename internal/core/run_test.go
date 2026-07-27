@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -113,4 +114,47 @@ func TestForegroundRecordsMetadata(t *testing.T) {
 	assert.NotEmpty(t, j.Username)
 	assert.NotEmpty(t, j.WorkDir)
 	assert.Equal(t, []string{"echo", "hi"}, j.Command)
+}
+
+func TestForegroundCanBeStopped(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	result := make(chan error, 1)
+	go func() {
+		_, err := CreateAndRunForeground(store, stateDir, []string{"sleep", "60"}, RunOptions{})
+		result <- err
+	}()
+
+	var running *model.Job
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		key, err := store.GetLastKeyForContext("")
+		if err == nil && key != "" {
+			j, getErr := store.Get(key)
+			if getErr == nil && j.Status == model.StatusRunning {
+				running = j
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.NotNil(t, running, "foreground job did not reach running state")
+	assert.NotEqual(t, os.Getpid(), running.PID, "PID must identify the command, not the caller")
+	assert.NotZero(t, running.PGID)
+
+	require.NoError(t, StopJob(store, running.Key))
+
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("foreground command continued running after StopJob")
+	}
+
+	got, err := store.Get(running.Key)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, got.Status)
+	assert.Equal(t, model.ReasonStopped, got.Reason)
+	assert.Zero(t, got.PID)
+	assert.Zero(t, got.PGID)
 }

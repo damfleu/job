@@ -17,13 +17,12 @@ func StopJob(store db.JobStore, key string) error {
 		return err
 	}
 
+	shouldSignal := false
 	switch j.Status {
 	case model.StatusCompleted:
 		return fmt.Errorf("job %s is already completed", key)
 	case model.StatusRunning:
-		if j.PGID != 0 {
-			killProcessGroup(j.PGID)
-		}
+		shouldSignal = j.PGID != 0
 	case model.StatusPending, model.StatusBlocked:
 		// no process yet, just mark it stopped
 	}
@@ -31,9 +30,17 @@ func StopJob(store db.JobStore, key string) error {
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonStopped
 	j.StoppedAt = new(time.Now().UTC())
+	pgid := j.PGID
 	j.PID = 0
+	j.PGID = 0
 
-	return store.Update(j)
+	// Persist the user's intent before signaling. The process waiter can then
+	// observe and preserve ReasonStopped instead of racing to write ReasonExited.
+	updateErr := store.Update(j)
+	if shouldSignal {
+		killProcessGroup(pgid)
+	}
+	return updateErr
 }
 
 // killProcessGroup sends SIGTERM to the process group and waits up to 5s before escalating to

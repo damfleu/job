@@ -69,10 +69,20 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 	_ = store.Update(j) // best-effort: process is running regardless
 
 	waitErr := cmd.Wait()
+	_ = lf.Sync()
+
+	// StopJob records the stopped state before signaling the process. Preserve it
+	// instead of racing to overwrite it as a normal exit.
+	current, getErr := store.Get(key)
+	if getErr == nil && current.Status == model.StatusCompleted && current.Reason == model.ReasonStopped {
+		notify.Fire(notifiers, current)
+		return nil
+	}
 
 	j.Status = model.StatusCompleted
 	j.Reason = model.ReasonExited
 	j.PID = 0
+	j.PGID = 0
 	j.StoppedAt = new(time.Now().UTC())
 
 	exitCode := 0
@@ -83,7 +93,6 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 	}
 	j.ExitCode = &exitCode
 
-	_ = lf.Sync()
 	// Best-effort: the job completed regardless of whether we can persist the state.
 	_ = store.Update(j)
 	notify.Fire(notifiers, j)

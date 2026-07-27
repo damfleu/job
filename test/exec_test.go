@@ -2,8 +2,11 @@ package integration
 
 import (
 	"os"
+	"os/exec"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,6 +40,61 @@ func TestForegroundJobNonZeroExit(t *testing.T) {
 	assert.Equal(t, model.StatusCompleted, j.Status)
 	require.NotNil(t, j.ExitCode)
 	assert.Equal(t, 1, *j.ExitCode)
+}
+
+func TestForegroundInterruptCleansUp(t *testing.T) {
+	h := newHarness(t)
+	cmd := exec.Command(binary, "run", "-f", "sleep", "60")
+	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
+	require.NoError(t, cmd.Start())
+
+	finished := false
+	t.Cleanup(func() {
+		if !finished {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	})
+
+	var running *model.Job
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		key, err := h.db.GetLastKeyForContext("")
+		if err == nil && key != "" {
+			j, getErr := h.db.Get(key)
+			if getErr == nil && j.Status == model.StatusRunning {
+				running = j
+				break
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	require.NotNil(t, running, "foreground job did not reach running state")
+
+	childPID := running.PID
+	require.NoError(t, cmd.Process.Signal(os.Interrupt))
+
+	waitResult := make(chan error, 1)
+	go func() { waitResult <- cmd.Wait() }()
+	select {
+	case err := <-waitResult:
+		finished = true
+		assert.Error(t, err)
+	case <-time.After(5 * time.Second):
+		_ = cmd.Process.Kill()
+		<-waitResult
+		finished = true
+		t.Fatal("foreground CLI did not exit after interrupt")
+	}
+
+	assert.Equal(t, 130, cmd.ProcessState.ExitCode())
+	got, err := h.db.Get(running.Key)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, got.Status)
+	assert.Equal(t, model.ReasonStopped, got.Reason)
+	assert.Zero(t, got.PID)
+	assert.Zero(t, got.PGID)
+	assert.Error(t, syscall.Kill(childPID, 0), "foreground child should no longer exist")
 }
 
 func TestBackgroundJob(t *testing.T) {
