@@ -30,6 +30,9 @@ func ExpandDependentCascade(store db.JobStore, rootKey string) ([]SequenceStep, 
 				continue
 			}
 			for _, dep := range j.Deps {
+				if dep.Kind != model.DepAfterSuccess {
+					continue
+				}
 				if _, inSubtree := subtree[dep.Key]; inSubtree {
 					subtree[j.Key] = j
 					added = true

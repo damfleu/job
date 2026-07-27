@@ -69,6 +69,22 @@ func TestExpandDependentCascadeIgnoresUnrelatedFailures(t *testing.T) {
 	assert.ElementsMatch(t, []string{"root", "child"}, keys)
 }
 
+func TestExpandDependentCascadeIgnoresAfterEdgeToUnrelatedFailure(t *testing.T) {
+	store, _ := setupRun(t)
+
+	completedJob(t, store, "root", 1)
+	completedJob(t, store, "other-root", 1)
+	depFailedJob(t, store, "unrelated-child", []model.Dep{
+		{Key: "root", Kind: model.DepAfter},
+		{Key: "other-root", Kind: model.DepAfterSuccess},
+	})
+
+	steps, err := ExpandDependentCascade(store, "root")
+	require.NoError(t, err)
+	require.Len(t, steps, 1)
+	assert.Equal(t, "root", steps[0].OriginalKey)
+}
+
 func TestExpandDependentCascadePreservesExternalDep(t *testing.T) {
 	store, _ := setupRun(t)
 
