@@ -66,6 +66,19 @@ func TestDeleteJobMissingLogFileIsOK(t *testing.T) {
 	assert.ErrorIs(t, err, db.ErrNotFound)
 }
 
+func TestDeleteJobKeepsDBRecordWhenLogRemovalFails(t *testing.T) {
+	store, _ := setupRun(t)
+
+	logFile := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(logFile, "output"), []byte("output"), 0o644))
+
+	j := completedJobWithLog(t, store, logFile)
+	require.Error(t, DeleteJob(store, j))
+
+	_, err := store.Get(j.Key)
+	assert.NoError(t, err, "job should remain when its log cannot be deleted")
+}
+
 func TestDeleteJobRejectsIncompleteJobs(t *testing.T) {
 	for _, status := range []model.Status{
 		model.StatusPending,
