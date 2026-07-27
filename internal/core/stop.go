@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"syscall"
 	"time"
@@ -46,13 +47,17 @@ func StopJob(store db.JobStore, key string) error {
 // killProcessGroup sends SIGTERM to the process group and waits up to 5s before escalating to
 // SIGKILL.
 func killProcessGroup(pgid int) {
+	killProcessGroupWithGrace(pgid, 5*time.Second)
+}
+
+func killProcessGroupWithGrace(pgid int, gracePeriod time.Duration) {
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(gracePeriod)
 	for time.Now().Before(deadline) {
 		time.Sleep(100 * time.Millisecond)
-		if err := syscall.Kill(pgid, 0); err != nil {
-			return // process gone
+		if err := syscall.Kill(-pgid, 0); errors.Is(err, syscall.ESRCH) {
+			return // process group gone
 		}
 	}
 

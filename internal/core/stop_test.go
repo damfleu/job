@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"os/exec"
 	"syscall"
 	"testing"
@@ -88,6 +89,27 @@ func TestStopKillsProcess(t *testing.T) {
 	assert.Equal(t, model.ReasonStopped, got.Reason)
 	assert.NotNil(t, got.StoppedAt)
 	assert.Equal(t, 0, got.PID)
+}
+
+func TestKillProcessGroupEscalatesAfterLeaderExits(t *testing.T) {
+	// The group leader starts a child that inherits SIGTERM as ignored, then exits.
+	// This leaves a live process group without a process whose PID equals the PGID.
+	cmd := exec.Command("/bin/sh", "-c", `trap '' TERM; /bin/sh -c 'while :; do sleep 1; done' &`)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	require.NoError(t, cmd.Start())
+
+	pgid := cmd.Process.Pid
+	t.Cleanup(func() { _ = syscall.Kill(-pgid, syscall.SIGKILL) })
+
+	require.NoError(t, cmd.Wait())
+	require.ErrorIs(t, syscall.Kill(pgid, 0), syscall.ESRCH, "group leader should be gone")
+	require.NoError(t, syscall.Kill(-pgid, 0), "child should keep the process group alive")
+
+	killProcessGroupWithGrace(pgid, 200*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		return errors.Is(syscall.Kill(-pgid, 0), syscall.ESRCH)
+	}, 2*time.Second, 10*time.Millisecond, "SIGKILL should remove the remaining group members")
 }
 
 func TestStopBlockedJob(t *testing.T) {
