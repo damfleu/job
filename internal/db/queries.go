@@ -170,13 +170,13 @@ func (d *DB) GetLastKeyByStatus(status model.Status, context string) (string, er
 }
 
 // searchLimit caps the number of rows Search returns, most-recently-created first.
-// An empty query matches every job (LIKE "%%"), so this also bounds the
-// picker's bare-"." candidate list.
+// An empty query matches every command, so this also bounds the picker's
+// bare-"." candidate list.
 const searchLimit = 50
 
 func (d *DB) Search(query, context string) ([]*model.Job, error) {
-	sqlQuery := `SELECT ` + jobCols + ` FROM jobs WHERE command LIKE ?`
-	args := []any{"%" + query + "%"}
+	sqlQuery := `SELECT ` + jobCols + ` FROM jobs WHERE instr(lower(cmd_str(command)), lower(?)) > 0`
+	args := []any{query}
 	if context != "" {
 		sqlQuery += ` AND context = ?`
 		args = append(args, context)

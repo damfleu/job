@@ -265,18 +265,55 @@ func TestSearch(t *testing.T) {
 	j1.Command = []string{"make", "-j8"}
 	j2 := makeJob("k2")
 	j2.Command = []string{"go", "test", "./..."}
+	j3 := makeJob("k3")
+	j3.Command = []string{"make", "test"}
 
 	require.NoError(t, db.Insert(j1))
 	require.NoError(t, db.Insert(j2))
+	require.NoError(t, db.Insert(j3))
 
 	results, err := db.Search("make", "")
 	require.NoError(t, err)
-	require.Len(t, results, 1)
-	assert.Equal(t, "k1", results[0].Key)
+	require.Len(t, results, 2)
 
 	all, err := db.Search("go", "")
 	require.NoError(t, err)
 	assert.Len(t, all, 1)
+
+	multiWord, err := db.Search("make test", "")
+	require.NoError(t, err)
+	require.Len(t, multiWord, 1)
+	assert.Equal(t, "k3", multiWord[0].Key)
+
+	caseInsensitive, err := db.Search("MAKE TEST", "")
+	require.NoError(t, err)
+	require.Len(t, caseInsensitive, 1)
+	assert.Equal(t, "k3", caseInsensitive[0].Key)
+}
+
+func TestSearchTreatsLikeMetacharactersLiterally(t *testing.T) {
+	db := openMemDB(t)
+
+	percent := makeJob("percent")
+	percent.Command = []string{"echo", "100%"}
+	underscore := makeJob("underscore")
+	underscore.Command = []string{"echo", "snake_case"}
+	plain := makeJob("plain")
+	plain.Command = []string{"echo", "ordinary"}
+
+	require.NoError(t, db.Insert(percent))
+	require.NoError(t, db.Insert(underscore))
+	require.NoError(t, db.Insert(plain))
+
+	results, err := db.Search("%", "")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "percent", results[0].Key)
+
+	results, err = db.Search("_", "")
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Equal(t, "underscore", results[0].Key)
 }
 
 func TestSearchLimit(t *testing.T) {
