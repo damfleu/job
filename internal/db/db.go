@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
 	"job/internal/model"
+	"job/internal/permissions"
 
 	"modernc.org/sqlite"
 )
@@ -85,6 +87,11 @@ type DB struct {
 
 // Open opens (or creates) the SQLite database at path with WAL mode enabled.
 func Open(path string) (*DB, error) {
+	created, err := createDatabaseFile(path)
+	if err != nil {
+		return nil, err
+	}
+
 	sqldb, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -97,7 +104,44 @@ func Open(path string) (*DB, error) {
 		sqldb.Close()
 		return nil, err
 	}
+	if created {
+		if err := setDatabaseFileModes(path); err != nil {
+			sqldb.Close()
+			return nil, err
+		}
+	}
 	return &DB{db: sqldb}, nil
+}
+
+func createDatabaseFile(path string) (bool, error) {
+	if path == ":memory:" {
+		return false, nil
+	}
+
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, permissions.FileMode)
+	if errors.Is(err, os.ErrExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("db: create %s: %w", path, err)
+	}
+	if err := f.Chmod(permissions.FileMode); err != nil {
+		f.Close()
+		return false, fmt.Errorf("db: chmod %s: %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		return false, fmt.Errorf("db: close %s: %w", path, err)
+	}
+	return true, nil
+}
+
+func setDatabaseFileModes(path string) error {
+	for _, candidate := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(candidate, permissions.FileMode); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("db: chmod %s: %w", candidate, err)
+		}
+	}
+	return nil
 }
 
 func (d *DB) Close() error {

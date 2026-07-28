@@ -1,7 +1,10 @@
 package db
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"job/internal/model"
+	"job/internal/permissions"
 )
 
 func openMemDB(t *testing.T) *DB {
@@ -17,6 +21,39 @@ func openMemDB(t *testing.T) *DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
+}
+
+func TestOpenCreatesPrivateDatabaseFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "job.db")
+
+	d, err := Open(path)
+	require.NoError(t, err)
+	defer d.Close()
+
+	for _, candidate := range []string{path, path + "-wal", path + "-shm"} {
+		info, err := os.Stat(candidate)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, permissions.FileMode, info.Mode().Perm(), candidate)
+	}
+}
+
+func TestOpenDoesNotChangeExistingDatabasePermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "job.db")
+	d, err := Open(path)
+	require.NoError(t, err)
+	require.NoError(t, d.Close())
+	require.NoError(t, os.Chmod(path, 0o644))
+
+	d, err = Open(path)
+	require.NoError(t, err)
+	require.NoError(t, d.Close())
+
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o644), info.Mode().Perm())
 }
 
 func makeJob(key string) *model.Job {

@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"job/internal/permissions"
 )
 
 func TestPath(t *testing.T) {
@@ -50,6 +52,15 @@ func TestCreate(t *testing.T) {
 	// parent directory was created
 	_, err = os.Stat(filepath.Dir(f.Name()))
 	require.NoError(t, err)
+
+	fileInfo, err := os.Stat(f.Name())
+	require.NoError(t, err)
+	assert.Equal(t, permissions.FileMode, fileInfo.Mode().Perm())
+	for _, path := range []string{filepath.Join(dir, "log"), filepath.Dir(f.Name())} {
+		dirInfo, err := os.Stat(path)
+		require.NoError(t, err)
+		assert.Equal(t, permissions.DirMode, dirInfo.Mode().Perm())
+	}
 }
 
 func TestCreateIdempotent(t *testing.T) {

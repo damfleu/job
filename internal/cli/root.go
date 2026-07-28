@@ -12,6 +12,7 @@ import (
 	"job/internal/core"
 	"job/internal/db"
 	"job/internal/model"
+	"job/internal/permissions"
 )
 
 var version = "dev"
@@ -56,7 +57,7 @@ var rootCmd = &cobra.Command{
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		dir := filepath.Join(stateDir(), "db")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, permissions.DirMode); err != nil {
 			return fmt.Errorf("creating state dir: %w", err)
 		}
 		d, err := db.Open(filepath.Join(dir, "job.db"))

@@ -12,6 +12,7 @@ import (
 	"job/internal/db"
 	"job/internal/model"
 	"job/internal/notify"
+	"job/internal/permissions"
 )
 
 // RunBackground is called by the __exec child process. It loads the job, runs the command with
@@ -43,10 +44,10 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Dir(j.LogFile), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(j.LogFile), permissions.DirMode); err != nil {
 		return fmt.Errorf("creating log dir: %w", err)
 	}
-	lf, err := os.OpenFile(j.LogFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	lf, err := os.OpenFile(j.LogFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, permissions.FileMode)
 	if err != nil {
 		return fmt.Errorf("opening log file: %w", err)
 	}

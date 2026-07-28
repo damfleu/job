@@ -11,6 +11,7 @@ import (
 
 	"job/internal/db"
 	"job/internal/model"
+	"job/internal/permissions"
 )
 
 func setupRun(t *testing.T) (*db.DB, string) {
@@ -71,6 +72,9 @@ func TestForegroundLogFile(t *testing.T) {
 	content, err := os.ReadFile(j.LogFile)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "hello from job")
+	info, err := os.Stat(j.LogFile)
+	require.NoError(t, err)
+	assert.Equal(t, permissions.FileMode, info.Mode().Perm())
 }
 
 func TestForegroundAlias(t *testing.T) {

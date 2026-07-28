@@ -10,6 +10,7 @@ import (
 
 	"job/internal/logfile"
 	"job/internal/model"
+	"job/internal/permissions"
 )
 
 func pendingJob(t *testing.T, store interface {
@@ -67,6 +68,9 @@ func TestRunBackgroundLogFile(t *testing.T) {
 	content, err := os.ReadFile(j.LogFile)
 	require.NoError(t, err)
 	assert.Contains(t, string(content), "hello from bg")
+	info, err := os.Stat(j.LogFile)
+	require.NoError(t, err)
+	assert.Equal(t, permissions.FileMode, info.Mode().Perm())
 }
 
 func TestRunBackgroundRecordsPGID(t *testing.T) {

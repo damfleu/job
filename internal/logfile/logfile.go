@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"job/internal/permissions"
 )
 
 // Path returns the log file path for key within stateDir. Logs are sharded into subdirectories
@@ -17,10 +19,10 @@ func Path(stateDir, key string) string {
 // Create creates the log file for key within stateDir, making parent directories as needed.
 func Create(stateDir, key string) (*os.File, error) {
 	path := Path(stateDir, key)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), permissions.DirMode); err != nil {
 		return nil, fmt.Errorf("logfile: mkdir: %w", err)
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, permissions.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("logfile: create: %w", err)
 	}
