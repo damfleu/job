@@ -98,7 +98,6 @@ func (f *fakeStore) SaveSequence(seq *model.Sequence) error           { return n
 func (f *fakeStore) GetSequence(name string) (*model.Sequence, error) { return nil, nil }
 func (f *fakeStore) ListSequences() ([]*model.Sequence, error)        { return nil, nil }
 func (f *fakeStore) DeleteSequence(name string) error                 { return nil }
-func (f *fakeStore) SequencesForJob(jobKey string) ([]string, error)  { return nil, nil }
 
 func job(key, alias string, cmd []string, status model.Status) *model.Job {
 	return &model.Job{Key: key, Alias: alias, Command: cmd, Status: status}

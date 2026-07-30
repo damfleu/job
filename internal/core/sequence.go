@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"job/internal/db"
@@ -34,9 +35,36 @@ func SaveSequence(store db.JobStore, name string, jobs []*model.Job) error {
 		}
 	}
 
-	steps, err := topoSort(visited)
+	order, err := topoSort(visited)
 	if err != nil {
 		return err
+	}
+
+	stepIDs := make(map[string]int, len(order))
+	for i, key := range order {
+		stepIDs[key] = i + 1
+	}
+
+	steps := make([]model.SequenceStep, len(order))
+	for i, key := range order {
+		job := visited[key]
+		deps := make([]model.SequenceDep, len(job.Deps))
+		for j, dep := range job.Deps {
+			stepID, ok := stepIDs[dep.Key]
+			if !ok {
+				return fmt.Errorf("sequence: dependency %s is outside the captured graph", dep.Key)
+			}
+			deps[j] = model.SequenceDep{StepID: stepID, Kind: dep.Kind}
+		}
+		steps[i] = model.SequenceStep{
+			ID:      stepIDs[key],
+			Command: append([]string(nil), job.Command...),
+			WorkDir: job.WorkDir,
+			Deps:    deps,
+		}
+	}
+	if err := model.ValidateSequenceSteps(steps); err != nil {
+		return fmt.Errorf("sequence: %w", err)
 	}
 
 	return store.SaveSequence(&model.Sequence{
@@ -46,46 +74,40 @@ func SaveSequence(store db.JobStore, name string, jobs []*model.Job) error {
 	})
 }
 
-// SequenceStep describes one step of a sequence as returned by ExpandSequence. Deps still
-// reference the original job keys from when the sequence was saved; the caller is responsible
-// for remapping them to the keys of the newly spawned jobs.
-type SequenceStep struct {
-	OriginalKey string
-	Command     []string
-	WorkDir     string
-	Context     string
-	Deps        []model.Dep
+// RunStep describes one step that is ready to be spawned. Dependency keys
+// refer to other RunStep IDs and are remapped to new job keys by the caller.
+// Retry cascades may additionally retain dependencies on jobs outside the set.
+type RunStep struct {
+	ID      string
+	Command []string
+	WorkDir string
+	Deps    []model.Dep
 }
 
 // ExpandSequence loads a named sequence and returns its steps in topological order as plain
-// descriptors, without spawning anything. When workDirOverride is non-empty it replaces each
-// step's original WorkDir; similarly for contextOverride.
-func ExpandSequence(store db.JobStore, name, workDirOverride, contextOverride string) ([]SequenceStep, error) {
+// descriptors, without spawning anything. When workDirOverride is non-empty it
+// replaces each step's original WorkDir.
+func ExpandSequence(store db.JobStore, name, workDirOverride string) ([]RunStep, error) {
 	seq, err := store.GetSequence(name)
 	if err != nil {
 		return nil, err
 	}
 
-	steps := make([]SequenceStep, len(seq.Steps))
-	for i, key := range seq.Steps {
-		j, err := store.Get(key)
-		if err != nil {
-			return nil, fmt.Errorf("sequence %s: loading step %d (%s): %w", name, i, key, err)
-		}
-		workDir := j.WorkDir
+	steps := make([]RunStep, len(seq.Steps))
+	for i, step := range seq.Steps {
+		workDir := step.WorkDir
 		if workDirOverride != "" {
 			workDir = workDirOverride
 		}
-		context := j.Context
-		if contextOverride != "" {
-			context = contextOverride
+		deps := make([]model.Dep, len(step.Deps))
+		for j, dep := range step.Deps {
+			deps[j] = model.Dep{Key: strconv.Itoa(dep.StepID), Kind: dep.Kind}
 		}
-		steps[i] = SequenceStep{
-			OriginalKey: key,
-			Command:     j.Command,
-			WorkDir:     workDir,
-			Context:     context,
-			Deps:        j.Deps,
+		steps[i] = RunStep{
+			ID:      strconv.Itoa(step.ID),
+			Command: append([]string(nil), step.Command...),
+			WorkDir: workDir,
+			Deps:    deps,
 		}
 	}
 	return steps, nil

@@ -42,9 +42,9 @@ func TestExpandDependentCascadeChain(t *testing.T) {
 	require.Len(t, steps, 3)
 
 	// root first, then dependents in dependency order
-	assert.Equal(t, "root", steps[0].OriginalKey)
-	assert.Equal(t, "child", steps[1].OriginalKey)
-	assert.Equal(t, "grandchild", steps[2].OriginalKey)
+	assert.Equal(t, "root", steps[0].ID)
+	assert.Equal(t, "child", steps[1].ID)
+	assert.Equal(t, "grandchild", steps[2].ID)
 
 	// root doesn't carry over its own (external) deps
 	assert.Empty(t, steps[0].Deps)
@@ -65,7 +65,7 @@ func TestExpandDependentCascadeIgnoresUnrelatedFailures(t *testing.T) {
 	steps, err := ExpandDependentCascade(store, "root")
 	require.NoError(t, err)
 	require.Len(t, steps, 2)
-	keys := []string{steps[0].OriginalKey, steps[1].OriginalKey}
+	keys := []string{steps[0].ID, steps[1].ID}
 	assert.ElementsMatch(t, []string{"root", "child"}, keys)
 }
 
@@ -82,7 +82,7 @@ func TestExpandDependentCascadeIgnoresAfterEdgeToUnrelatedFailure(t *testing.T) 
 	steps, err := ExpandDependentCascade(store, "root")
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
-	assert.Equal(t, "root", steps[0].OriginalKey)
+	assert.Equal(t, "root", steps[0].ID)
 }
 
 func TestExpandDependentCascadePreservesExternalDep(t *testing.T) {
@@ -101,7 +101,7 @@ func TestExpandDependentCascadePreservesExternalDep(t *testing.T) {
 	require.Len(t, steps, 2)
 
 	childStep := steps[1]
-	require.Equal(t, "child", childStep.OriginalKey)
+	require.Equal(t, "child", childStep.ID)
 	require.Len(t, childStep.Deps, 2)
 	assert.Contains(t, childStep.Deps, model.Dep{Key: "root", Kind: model.DepAfterSuccess})
 	assert.Contains(t, childStep.Deps, model.Dep{Key: "unrelated-succeeded", Kind: model.DepAfterSuccess})
@@ -114,6 +114,6 @@ func TestExpandDependentCascadeNoDependents(t *testing.T) {
 	steps, err := ExpandDependentCascade(store, "root")
 	require.NoError(t, err)
 	require.Len(t, steps, 1)
-	assert.Equal(t, "root", steps[0].OriginalKey)
+	assert.Equal(t, "root", steps[0].ID)
 	assert.Empty(t, steps[0].Deps)
 }

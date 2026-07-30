@@ -83,13 +83,6 @@ func resolveRemoveJobs(cmd *cobra.Command, args []string) ([]*model.Job, error) 
 		if j.Status != model.StatusCompleted {
 			return nil, fmt.Errorf("job %s is not completed (status: %s)", j.Key, j.Status)
 		}
-		seqs, err := globalDB.SequencesForJob(j.Key)
-		if err != nil {
-			return nil, err
-		}
-		if len(seqs) > 0 {
-			return nil, fmt.Errorf("job %s is referenced by sequence(s): %s", j.Key, strings.Join(seqs, ", "))
-		}
 		seen[j.Key] = true
 		jobs = append(jobs, j)
 	}

@@ -120,11 +120,11 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 	return nil
 }
 
-// runSteps spawns each step in order, remapping intra-set deps (via OriginalKey) to the newly
+// runSteps spawns each step in order, remapping intra-set deps (via ID) to the newly
 // assigned keys as they're produced. extraDeps are prepended to any step that has no intra-set
 // deps of its own (i.e. a root of the step set), so external dependencies still apply. Returns
 // the new keys in step order.
-func runSteps(steps []core.SequenceStep, extraDeps []model.Dep, notify bool) ([]string, error) {
+func runSteps(steps []core.RunStep, extraDeps []model.Dep, notify bool) ([]string, error) {
 	newKeys := make([]string, len(steps))
 	origToNew := make(map[string]string, len(steps))
 
@@ -145,7 +145,7 @@ func runSteps(steps []core.SequenceStep, extraDeps []model.Dep, notify bool) ([]
 		if err != nil {
 			return nil, fmt.Errorf("spawning step %d: %w", i, err)
 		}
-		origToNew[step.OriginalKey] = key
+		origToNew[step.ID] = key
 		newKeys[i] = key
 	}
 	return newKeys, nil

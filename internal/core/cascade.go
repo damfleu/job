@@ -7,11 +7,10 @@ import (
 	"job/internal/model"
 )
 
-// ExpandDependentCascade returns rootKey and every job that transitively failed because of it
-// (status completed, reason dep_failed), in topological order (rootKey first). As with
-// ExpandSequence, each step's Deps still reference the original job keys; the caller is
-// responsible for remapping them to the keys of the newly spawned jobs.
-func ExpandDependentCascade(store db.JobStore, rootKey string) ([]SequenceStep, error) {
+// ExpandDependentCascade returns rootKey and every job that transitively failed
+// because of it (status completed, reason dep_failed), in topological order
+// (rootKey first). Dependency keys are remapped when the steps are spawned.
+func ExpandDependentCascade(store db.JobStore, rootKey string) ([]RunStep, error) {
 	root, err := store.Get(rootKey)
 	if err != nil {
 		return nil, fmt.Errorf("cascade: fetching root %s: %w", rootKey, err)
@@ -47,7 +46,7 @@ func ExpandDependentCascade(store db.JobStore, rootKey string) ([]SequenceStep, 
 		return nil, err
 	}
 
-	steps := make([]SequenceStep, len(order))
+	steps := make([]RunStep, len(order))
 	for i, key := range order {
 		j := subtree[key]
 		deps := j.Deps
@@ -56,12 +55,11 @@ func ExpandDependentCascade(store db.JobStore, rootKey string) ([]SequenceStep, 
 			// its original (external) deps, only whatever the caller passes explicitly.
 			deps = nil
 		}
-		steps[i] = SequenceStep{
-			OriginalKey: key,
-			Command:     j.Command,
-			WorkDir:     j.WorkDir,
-			Context:     j.Context,
-			Deps:        deps,
+		steps[i] = RunStep{
+			ID:      key,
+			Command: j.Command,
+			WorkDir: j.WorkDir,
+			Deps:    deps,
 		}
 	}
 	return steps, nil

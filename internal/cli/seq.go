@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -40,8 +39,7 @@ var seqSaveCmd = &cobra.Command{
 			return err
 		}
 		if existing != nil {
-			last := existing.Steps[len(existing.Steps)-1]
-			fmt.Fprintf(cmd.ErrOrStderr(), "warning: replacing existing sequence %q (was: %s)\n", name, last)
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: replacing existing sequence %q\n", name)
 		}
 		jobs := make([]*model.Job, len(keys))
 		for i, key := range keys {
@@ -58,11 +56,12 @@ var seqSaveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		printSeqSteps(seq)
+		printSeqSteps(seq, seqSaveVerbose)
 		return nil
 	},
 }
 
+var seqSaveVerbose bool
 var seqRunCwd string
 var seqRunNotify bool
 var seqRunDeps []model.Dep
@@ -72,16 +71,15 @@ var seqRunCmd = &cobra.Command{
 	Short: "Replay a sequence",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var workDirOverride, contextOverride string
+		var workDirOverride string
 		if seqRunCwd != "" {
 			var err error
 			workDirOverride, err = resolveCwdFlag(seqRunCwd)
 			if err != nil {
 				return fmt.Errorf("resolving --cwd: %w", err)
 			}
-			contextOverride = core.ResolveContext(workDirOverride, globalConfig.Context.Resolvers)
 		}
-		steps, err := core.ExpandSequence(globalDB, args[0], workDirOverride, contextOverride)
+		steps, err := core.ExpandSequence(globalDB, args[0], workDirOverride)
 		if err != nil {
 			return err
 		}
@@ -123,10 +121,12 @@ var seqShowCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		printSeqSteps(seq)
+		printSeqSteps(seq, seqShowVerbose)
 		return nil
 	},
 }
+
+var seqShowVerbose bool
 
 var seqRmCmd = &cobra.Command{
 	Use:     "remove <name>",
@@ -144,10 +144,12 @@ var seqRmCmd = &cobra.Command{
 
 func init() {
 	addAnyFlag(seqSaveCmd)
+	seqSaveCmd.Flags().BoolVarP(&seqSaveVerbose, "verbose", "v", false, "show step working directories")
 	addCwdFlag(seqRunCmd, &seqRunCwd, "run steps in a directory instead of their original directories")
 	seqRunCmd.Flags().BoolVarP(&seqRunNotify, "notify", "n", false, "notify on completion of each step")
 	seqRunCmd.Flags().VarP(depFlag{model.DepAfter, &seqRunDeps}, "after", "a", "run sequence after job completes (any exit code)")
 	seqRunCmd.Flags().VarP(depFlag{model.DepAfterSuccess, &seqRunDeps}, "after-success", "A", "run sequence only if job succeeds (exit 0)")
+	seqShowCmd.Flags().BoolVarP(&seqShowVerbose, "verbose", "v", false, "show step working directories")
 	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd, seqRmCmd)
 	rootCmd.AddCommand(seqCmd)
 }
@@ -167,63 +169,84 @@ func printSeqTable(seqs []*model.Sequence) {
 	t.Render()
 }
 
-func printSeqSteps(seq *model.Sequence) {
-	jobs := make([]*model.Job, len(seq.Steps))
-	for i, key := range seq.Steps {
-		j, err := globalDB.Get(key)
-		if err != nil {
-			jobs[i] = &model.Job{Key: key, Command: []string{"<unavailable>"}}
+func printSeqSteps(seq *model.Sequence, verbose bool) {
+	fmt.Fprintln(os.Stdout, seq.Name)
+
+	showWorkDir := false
+	if verbose {
+		workDir, commonWorkDir := commonStepValue(seq.Steps, func(step model.SequenceStep) string {
+			return displayStepWorkDir(step.WorkDir)
+		})
+
+		if commonWorkDir {
+			fmt.Fprintf(os.Stdout, "cwd: %s\n", workDir)
 		} else {
-			jobs[i] = j
+			showWorkDir = true
 		}
 	}
-	fmt.Fprintf(os.Stdout, "%s\n\n", seq.Name)
-	fmt.Print(renderSeqTree(jobs))
+
+	fmt.Fprintln(os.Stdout)
+	fmt.Print(renderSeqTree(seq.Steps, showWorkDir))
 }
 
-// seqEdge pairs a child job with the dep kind linking it to its parent.
+func commonStepValue(
+	steps []model.SequenceStep,
+	value func(model.SequenceStep) string,
+) (string, bool) {
+	if len(steps) == 0 {
+		return "", false
+	}
+	first := value(steps[0])
+	for _, step := range steps[1:] {
+		if value(step) != first {
+			return "", false
+		}
+	}
+	return first, true
+}
+
+// seqEdge pairs a child step with the dep kind linking it to its parent.
 type seqEdge struct {
-	job  *model.Job
+	step *model.SequenceStep
 	kind model.DepKind
 }
 
 // renderSeqTree renders the sequence steps as a dependency tree, with ✓/~ prefixes
 // indicating after-success / after dep kinds on each child node.
-func renderSeqTree(jobs []*model.Job) string {
-	byKey := make(map[string]*model.Job, len(jobs))
-	for _, j := range jobs {
-		byKey[j.Key] = j
+func renderSeqTree(steps []model.SequenceStep, showWorkDir bool) string {
+	byID := make(map[int]*model.SequenceStep, len(steps))
+	for i := range steps {
+		byID[steps[i].ID] = &steps[i]
 	}
 
-	children := make(map[string][]seqEdge)
-	isChild := make(map[string]bool)
-	for _, j := range jobs {
-		for _, dep := range j.Deps {
-			if _, inSeq := byKey[dep.Key]; inSeq {
-				children[dep.Key] = append(children[dep.Key], seqEdge{job: j, kind: dep.Kind})
-				isChild[j.Key] = true
+	children := make(map[int][]seqEdge)
+	isChild := make(map[int]bool)
+	for i := range steps {
+		step := &steps[i]
+		for _, dep := range step.Deps {
+			if _, inSeq := byID[dep.StepID]; inSeq {
+				children[dep.StepID] = append(
+					children[dep.StepID],
+					seqEdge{step: step, kind: dep.Kind},
+				)
+				isChild[step.ID] = true
 			}
 		}
 	}
-	for key := range children {
-		sort.Slice(children[key], func(i, j int) bool {
-			return children[key][i].job.Key < children[key][j].job.Key
-		})
-	}
 
-	var roots []*model.Job
-	for _, j := range jobs {
-		if !isChild[j.Key] {
-			roots = append(roots, j)
+	var roots []*model.SequenceStep
+	for i := range steps {
+		if !isChild[steps[i].ID] {
+			roots = append(roots, &steps[i])
 		}
 	}
 
-	var buildNode func(j *model.Job, kind model.DepKind, isRoot bool) *tree.Tree
-	buildNode = func(j *model.Job, kind model.DepKind, isRoot bool) *tree.Tree {
-		label := seqNodeLabel(j, kind, isRoot)
+	var buildNode func(step *model.SequenceStep, kind model.DepKind, isRoot bool) *tree.Tree
+	buildNode = func(step *model.SequenceStep, kind model.DepKind, isRoot bool) *tree.Tree {
+		label := seqNodeLabel(step, kind, isRoot, showWorkDir)
 		t := tree.Root(label)
-		for _, edge := range children[j.Key] {
-			t.Child(buildNode(edge.job, edge.kind, false))
+		for _, edge := range children[step.ID] {
+			t.Child(buildNode(edge.step, edge.kind, false))
 		}
 		return t
 	}
@@ -235,7 +258,12 @@ func renderSeqTree(jobs []*model.Job) string {
 	return strings.Join(parts, "\n") + "\n"
 }
 
-func seqNodeLabel(j *model.Job, kind model.DepKind, isRoot bool) string {
+func seqNodeLabel(
+	step *model.SequenceStep,
+	kind model.DepKind,
+	isRoot bool,
+	showWorkDir bool,
+) string {
 	prefix := ""
 	if !isRoot {
 		switch kind {
@@ -245,6 +273,24 @@ func seqNodeLabel(j *model.Job, kind model.DepKind, isRoot bool) string {
 			prefix = "→ "
 		}
 	}
-	key := lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(j.Key)
-	return fmt.Sprintf("%s%s  %s", prefix, key, displayCmd(j.Command))
+	command := lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(displayCmd(step.Command))
+	if !showWorkDir {
+		return prefix + command
+	}
+
+	detailIndent := "  "
+	if prefix != "" {
+		detailIndent = strings.Repeat(" ", lipgloss.Width(prefix))
+	}
+
+	lines := []string{prefix + command}
+	lines = append(lines, fmt.Sprintf("%scwd: %s", detailIndent, displayStepWorkDir(step.WorkDir)))
+	return strings.Join(lines, "\n")
+}
+
+func displayStepWorkDir(workDir string) string {
+	if workDir == "" {
+		return "<default>"
+	}
+	return workDir
 }

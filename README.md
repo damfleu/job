@@ -130,7 +130,10 @@ Pass multiple keys to `save` to capture branches that share dependencies but hav
 job sequence save ci keyB keyC
 ```
 
-Jobs referenced by a sequence cannot be deleted to preserve the sequence's runnability.
+Sequences snapshot each job's command, working directory, and dependency structure.
+Source jobs can be deleted without affecting the saved sequence.
+Context is resolved again when each step starts, using its effective working
+directory and the current resolver environment.
 
 ### Notifications
 

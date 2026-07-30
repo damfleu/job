@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,16 +29,27 @@ func TestSequenceSaveAndList(t *testing.T) {
 	r := h.run("sequence", "save", "my-seq", keyB)
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "my-seq")
-	assert.Contains(t, r.stdout, keyA)
-	assert.Contains(t, r.stdout, keyB)
+	assert.Contains(t, r.stdout, "echo step-a")
+	assert.Contains(t, r.stdout, "echo step-b")
+	assert.NotContains(t, r.stdout, "cwd:")
 
 	seq, err := h.db.GetSequence("my-seq")
 	require.NoError(t, err)
-	assert.Equal(t, []string{keyA, keyB}, seq.Steps)
+	require.Len(t, seq.Steps, 2)
+	assert.Equal(t, 1, seq.Steps[0].ID)
+	assert.Equal(t, []string{"echo", "step-a"}, seq.Steps[0].Command)
+	assert.Equal(t, 2, seq.Steps[1].ID)
+	assert.Equal(t, []string{"echo", "step-b"}, seq.Steps[1].Command)
+	require.Len(t, seq.Steps[1].Deps, 1)
+	assert.Equal(t, 1, seq.Steps[1].Deps[0].StepID)
 
 	r = h.run("sequence", "list")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "my-seq")
+
+	r = h.run("sequence", "save", "--verbose", "verbose-seq", keyB)
+	assert.Equal(t, 0, r.exitCode)
+	assert.Equal(t, 1, strings.Count(r.stdout, "cwd:"))
 }
 
 func TestSequenceSaveReplacesWithWarning(t *testing.T) {
@@ -50,11 +62,12 @@ func TestSequenceSaveReplacesWithWarning(t *testing.T) {
 	r := h.run("sequence", "save", "my-seq", keyB)
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stderr, "warning: replacing existing sequence")
-	assert.Contains(t, r.stderr, keyA)
 
 	seq, err := h.db.GetSequence("my-seq")
 	require.NoError(t, err)
-	assert.Equal(t, []string{keyB}, seq.Steps)
+	require.Len(t, seq.Steps, 1)
+	assert.Equal(t, 1, seq.Steps[0].ID)
+	assert.Equal(t, []string{"echo", "step-b"}, seq.Steps[0].Command)
 }
 
 func TestSequenceShow(t *testing.T) {
@@ -69,11 +82,32 @@ func TestSequenceShow(t *testing.T) {
 	r := h.run("sequence", "show", "show-seq")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "show-seq")
-	assert.Contains(t, r.stdout, keyA)
-	assert.Contains(t, r.stdout, keyB)
 	assert.Contains(t, r.stdout, "echo step-a")
 	assert.Contains(t, r.stdout, "echo step-b")
+	assert.NotContains(t, r.stdout, "cwd:")
 	assert.Contains(t, r.stdout, "✓")
+
+	r = h.run("sequence", "show", "--verbose", "show-seq")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Equal(t, 1, strings.Count(r.stdout, "cwd:"))
+	assert.Contains(t, r.stdout, "echo step-a")
+	assert.Contains(t, r.stdout, "echo step-b")
+}
+
+func TestSequenceShowVerboseDisplaysDifferentWorkDirsPerStep(t *testing.T) {
+	h := newHarness(t)
+
+	keyA := runFg(h, "echo", "step-a")
+	otherDir, err := filepath.EvalSymlinks(t.TempDir())
+	require.NoError(t, err)
+	h.runFrom(otherDir, "run", "-f", "-A", keyA, "echo", "step-b")
+	keyB := h.lastJob().Key
+	h.run("sequence", "save", "mixed-cwd-seq", keyB)
+
+	r := h.run("sequence", "show", "--verbose", "mixed-cwd-seq")
+	require.Equal(t, 0, r.exitCode, r.stderr)
+	assert.Equal(t, 2, strings.Count(r.stdout, "cwd:"))
+	assert.Contains(t, r.stdout, otherDir)
 }
 
 func TestSequenceRun(t *testing.T) {
@@ -112,6 +146,28 @@ func TestSequenceRun(t *testing.T) {
 	require.Len(t, jB.Deps, 1)
 	assert.Equal(t, newKeyA, jB.Deps[0].Key)
 	assert.Equal(t, model.DepAfterSuccess, jB.Deps[0].Kind)
+}
+
+func TestSequenceRunResolvesContextAtExecutionTime(t *testing.T) {
+	h := newHarness(t)
+
+	originalResolver := h.writeScript("echo original-context\n")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", originalResolver))
+
+	sourceKey := runFg(h, "echo", "step")
+	h.run("sequence", "save", "context-seq", sourceKey)
+
+	currentResolver := h.writeScript("echo current-context\n")
+	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", currentResolver))
+
+	r := h.run("sequence", "run", "context-seq")
+	require.Equal(t, 0, r.exitCode, r.stderr)
+	newKey := strings.Fields(strings.TrimSpace(r.stdout))[0]
+	h.waitFor(newKey, model.StatusCompleted)
+
+	replayed, err := h.db.Get(newKey)
+	require.NoError(t, err)
+	assert.Equal(t, "current-context", replayed.Context)
 }
 
 func TestSequenceRunAfterSuccessPropagatesFailure(t *testing.T) {
@@ -155,20 +211,53 @@ func TestSequenceSaveRequiresKey(t *testing.T) {
 	assert.NotEqual(t, 0, r.exitCode)
 }
 
-func TestRmRefusesJobInSequence(t *testing.T) {
+func TestRmAllowsJobInSequence(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "echo", "step-a")
 	h.run("sequence", "save", "rm-seq", keyA)
 
+	h.waitFor(keyA, model.StatusCompleted)
 	r := h.run("remove", "--yes", keyA)
-	assert.NotEqual(t, 0, r.exitCode)
-	assert.Contains(t, r.stderr, "referenced by sequence")
-
-	// After removing the sequence, rm should work.
-	h.run("sequence", "rm", "rm-seq")
-	r = h.run("remove", "--yes", keyA)
 	assert.Equal(t, 0, r.exitCode)
+
+	r = h.run("sequence", "show", "rm-seq")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "echo step-a")
+}
+
+func TestSequenceRunsAfterSourceJobsAreDeleted(t *testing.T) {
+	h := newHarness(t)
+
+	keyA := runFg(h, "echo", "step-a")
+	h.run("run", "-A", keyA, "echo", "step-b")
+	keyB := h.lastJob().Key
+	h.run("sequence", "save", "durable-seq", keyB)
+
+	h.waitFor(keyA, model.StatusCompleted)
+	h.waitFor(keyB, model.StatusCompleted)
+	r := h.run("remove", "--yes", keyA, keyB)
+	require.Equal(t, 0, r.exitCode, r.stderr)
+
+	r = h.run("sequence", "show", "durable-seq")
+	require.Equal(t, 0, r.exitCode, r.stderr)
+	assert.Contains(t, r.stdout, "echo step-a")
+	assert.Contains(t, r.stdout, "echo step-b")
+
+	r = h.run("sequence", "run", "durable-seq")
+	require.Equal(t, 0, r.exitCode, r.stderr)
+	lines := strings.Split(strings.TrimSpace(r.stdout), "\n")
+	require.Len(t, lines, 2)
+	newKeyA := strings.Fields(lines[0])[0]
+	newKeyB := strings.Fields(lines[1])[0]
+	h.waitFor(newKeyA, model.StatusCompleted)
+	h.waitFor(newKeyB, model.StatusCompleted)
+
+	replayedB, err := h.db.Get(newKeyB)
+	require.NoError(t, err)
+	require.Len(t, replayedB.Deps, 1)
+	assert.Equal(t, newKeyA, replayedB.Deps[0].Key)
+	assert.Equal(t, model.DepAfterSuccess, replayedB.Deps[0].Kind)
 }
 
 func TestSequenceRunCwd(t *testing.T) {
@@ -244,16 +333,16 @@ func TestSequenceSaveMultipleRoots(t *testing.T) {
 	require.Len(t, seq.Steps, 3)
 
 	idx := func(key string) int {
-		for i, k := range seq.Steps {
-			if k == key {
+		for i, step := range seq.Steps {
+			if step.Command[len(step.Command)-1] == key {
 				return i
 			}
 		}
 		t.Fatalf("key %s not found in steps", key)
 		return -1
 	}
-	assert.Less(t, idx(keyA), idx(keyB))
-	assert.Less(t, idx(keyA), idx(keyC))
+	assert.Less(t, idx("a"), idx("b"))
+	assert.Less(t, idx("a"), idx("c"))
 
 	r = h.run("sequence", "run", "multi-root")
 	assert.Equal(t, 0, r.exitCode)
@@ -390,18 +479,18 @@ func TestSequenceDiamondDependency(t *testing.T) {
 
 	// A must come before B and C; B and C must come before D.
 	idx := func(key string) int {
-		for i, k := range seq.Steps {
-			if k == key {
+		for i, step := range seq.Steps {
+			if step.Command[len(step.Command)-1] == key {
 				return i
 			}
 		}
 		t.Fatalf("key %s not found in steps", key)
 		return -1
 	}
-	assert.Less(t, idx(keyA), idx(keyB))
-	assert.Less(t, idx(keyA), idx(keyC))
-	assert.Less(t, idx(keyB), idx(keyD))
-	assert.Less(t, idx(keyC), idx(keyD))
+	assert.Less(t, idx("a"), idx("b"))
+	assert.Less(t, idx("a"), idx("c"))
+	assert.Less(t, idx("b"), idx("d"))
+	assert.Less(t, idx("c"), idx("d"))
 
 	r := h.run("sequence", "run", "diamond")
 	assert.Equal(t, 0, r.exitCode)

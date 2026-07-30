@@ -76,8 +76,6 @@ type JobStore interface {
 	GetSequence(name string) (*model.Sequence, error)
 	ListSequences() ([]*model.Sequence, error)
 	DeleteSequence(name string) error
-	// SequencesForJob returns the names of sequences that reference the given job key.
-	SequencesForJob(jobKey string) ([]string, error)
 }
 
 // DB wraps a SQLite database.
