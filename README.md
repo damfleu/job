@@ -103,7 +103,7 @@ Spaces, tabs, and newlines all separate keys on stdin. `--yes` is required becau
 
 `run`, `retry`, and `seq run` accept `--cwd [dir]` to run in a specific directory; omitting the argument uses the current directory. See `contrib/` for resolver examples.
 
-`contrib/context-claude.sh` scopes jobs launched by Claude Code to their own `claude-<session-id>` context, isolated from your default view. Together with the `--json` output on `show`/`list`, these are the building blocks a Claude Code skill for `job` would use.
+`contrib/context-claude.sh` scopes jobs launched by Claude Code to their own `claude-<session-id>` context, isolated from your default view. When `job` detects Claude Code through `CLAUDECODE`, `CLAUDE_CODE`, or `CLAUDE_CODE_SESSION_ID`, `show` and `list` default to JSON so the agent can consume their output without remembering `--json`. Set `JOB_AGENT=1` to enable the same behavior for another agent. An explicit output choice wins: use `--json=false` for human-readable output, while `list --keys` continues to print one key per line.
 
 ### Sequences
 

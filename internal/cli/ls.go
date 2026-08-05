@@ -121,18 +121,19 @@ var lsCmd = &cobra.Command{
 			}
 		}
 
-		if lsJSON {
-			views := make([]jobView, len(jobs))
-			for i, j := range jobs {
-				views[i] = toJobView(j)
-			}
-			return printJSON(views)
-		}
+		// An explicit alternate output mode wins over the agent JSON default.
 		if lsKeys {
 			for _, j := range jobs {
 				fmt.Fprintln(cmd.OutOrStdout(), j.Key)
 			}
 			return nil
+		}
+		if wantsJSON(cmd, lsJSON) {
+			views := make([]jobView, len(jobs))
+			for i, j := range jobs {
+				views[i] = toJobView(j)
+			}
+			return printJSON(views)
 		}
 
 		// -a or no active jobs: show table

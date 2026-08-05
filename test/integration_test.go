@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,10 +100,21 @@ func (h *harness) runFrom(dir string, args ...string) result {
 	return h.runCommand(dir, nil, args...)
 }
 
+func (h *harness) runWithEnv(env map[string]string, args ...string) result {
+	return h.runCommandWithEnv("", nil, env, args...)
+}
+
 func (h *harness) runCommand(dir string, stdin io.Reader, args ...string) result {
+	return h.runCommandWithEnv(dir, stdin, nil, args...)
+}
+
+func (h *harness) runCommandWithEnv(dir string, stdin io.Reader, env map[string]string, args ...string) result {
 	h.t.Helper()
 	cmd := exec.Command(binary, args...)
-	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
+	cmd.Env = append(withoutAgentEnvironment(os.Environ()), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
+	for name, value := range env {
+		cmd.Env = append(cmd.Env, name+"="+value)
+	}
 	cmd.Stdin = stdin
 	if dir != "" {
 		cmd.Dir = dir
@@ -118,6 +130,23 @@ func (h *harness) runCommand(dir string, stdin io.Reader, args ...string) result
 		}
 	}
 	return result{stdout.String(), stderr.String(), code}
+}
+
+func withoutAgentEnvironment(env []string) []string {
+	agentVars := map[string]bool{
+		"JOB_AGENT":              true,
+		"CLAUDECODE":             true,
+		"CLAUDE_CODE":            true,
+		"CLAUDE_CODE_SESSION_ID": true,
+	}
+	filtered := make([]string, 0, len(env))
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, "=")
+		if !agentVars[name] {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
 }
 
 // waitFor polls until the job reaches the expected status or the test times out.

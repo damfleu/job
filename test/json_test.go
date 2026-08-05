@@ -97,3 +97,48 @@ func TestLsJSONEmpty(t *testing.T) {
 	assert.Equal(t, 0, r.exitCode)
 	assert.Equal(t, "[]\n", r.stdout)
 }
+
+func TestShowJSONAutomaticForClaude(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "true")
+
+	r := h.runWithEnv(map[string]string{"CLAUDECODE": "1"}, "show")
+	assert.Equal(t, 0, r.exitCode)
+
+	var view map[string]any
+	require.NoError(t, json.Unmarshal([]byte(r.stdout), &view))
+	assert.Equal(t, "success", view["outcome"])
+}
+
+func TestLsJSONAutomaticForClaude(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "true")
+
+	r := h.runWithEnv(map[string]string{"CLAUDE_CODE_SESSION_ID": "session-id"}, "list")
+	assert.Equal(t, 0, r.exitCode)
+
+	var views []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(r.stdout), &views))
+	require.Len(t, views, 1)
+	assert.Equal(t, "success", views[0]["outcome"])
+}
+
+func TestShowAutomaticJSONCanBeDisabled(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "true")
+
+	r := h.runWithEnv(map[string]string{"CLAUDECODE": "1"}, "show", "--json=false")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "Key:")
+	assert.False(t, json.Valid([]byte(r.stdout)))
+}
+
+func TestLsKeysOverrideAutomaticJSON(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "true")
+	key := h.lastJob().Key
+
+	r := h.runWithEnv(map[string]string{"JOB_AGENT": "true"}, "list", "--keys")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Equal(t, key+"\n", r.stdout)
+}

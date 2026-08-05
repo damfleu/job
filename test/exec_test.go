@@ -45,7 +45,7 @@ func TestForegroundJobNonZeroExit(t *testing.T) {
 func TestForegroundInterruptCleansUp(t *testing.T) {
 	h := newHarness(t)
 	cmd := exec.Command(binary, "run", "-f", "sleep", "60")
-	cmd.Env = append(os.Environ(), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
+	cmd.Env = append(withoutAgentEnvironment(os.Environ()), "JOB_STATE_DIR="+h.stateDir, "JOB_CONFIG_DIR="+h.configDir)
 	require.NoError(t, cmd.Start())
 
 	finished := false

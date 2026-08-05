@@ -21,7 +21,7 @@ var showCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if showJSON {
+		if wantsJSON(cmd, showJSON) {
 			return printJSON(toJobView(j))
 		}
 		printJob(j)
