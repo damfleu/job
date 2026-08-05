@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -47,6 +48,28 @@ func jobKeys(jobs []*model.Job) []string {
 		keys[i] = j.Key
 	}
 	return keys
+}
+
+func TestListAnyAlias(t *testing.T) {
+	assert.Contains(t, lsCmd.Aliases, "lsa")
+
+	var gotAny bool
+	cmd := &cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls", "lsa"},
+		PreRunE: lsCmd.PreRunE,
+		Run: func(cmd *cobra.Command, args []string) {
+			gotAny, _ = cmd.Flags().GetBool("any")
+		},
+	}
+	cmd.Flags().Bool("any", false, "")
+
+	root := &cobra.Command{Use: "job"}
+	root.AddCommand(cmd)
+	root.SetArgs([]string{"lsa"})
+
+	require.NoError(t, root.Execute())
+	assert.True(t, gotAny)
 }
 
 func TestJobStatusText(t *testing.T) {

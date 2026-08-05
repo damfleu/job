@@ -31,9 +31,15 @@ var (
 
 var lsCmd = &cobra.Command{
 	Use:     "list",
-	Aliases: []string{"ls"},
+	Aliases: []string{"ls", "lsa"},
 	Short:   "List jobs",
 	Args:    cobra.NoArgs,
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.CalledAs() == "lsa" && !cmd.Flags().Changed("any") {
+			return cmd.Flags().Set("any", "true")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if lsFilter != "" {
 			if _, err := regexp.Compile(lsFilter); err != nil {
