@@ -138,6 +138,7 @@ func withoutAgentEnvironment(env []string) []string {
 		"CLAUDECODE":             true,
 		"CLAUDE_CODE":            true,
 		"CLAUDE_CODE_SESSION_ID": true,
+		"CODEX_THREAD_ID":        true,
 	}
 	filtered := make([]string, 0, len(env))
 	for _, entry := range env {

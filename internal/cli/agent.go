@@ -13,16 +13,27 @@ var agentEnvVars = []string{
 	"CLAUDE_CODE",
 }
 
-// runningUnderAgent reports whether job was invoked by Claude Code or an
-// explicitly identified agent. Claude Code exposes these variables to command
-// subprocesses, while JOB_AGENT provides a vendor-neutral override.
+var agentSessionEnvVars = []string{
+	"CLAUDE_CODE_SESSION_ID",
+	"CODEX_THREAD_ID",
+}
+
+// runningUnderAgent reports whether job was invoked by a supported coding
+// agent or an explicitly identified agent. Claude Code and Codex expose these
+// variables to command subprocesses, while JOB_AGENT provides a vendor-neutral
+// override.
 func runningUnderAgent() bool {
 	for _, name := range agentEnvVars {
 		if envTruthy(name) {
 			return true
 		}
 	}
-	return envPresent("CLAUDE_CODE_SESSION_ID")
+	for _, name := range agentSessionEnvVars {
+		if envPresent(name) {
+			return true
+		}
+	}
+	return false
 }
 
 func envTruthy(name string) bool {

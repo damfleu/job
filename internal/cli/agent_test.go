@@ -7,7 +7,9 @@ func clearAgentDetectionEnv(t *testing.T) {
 	for _, name := range agentEnvVars {
 		t.Setenv(name, "")
 	}
-	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
+	for _, name := range agentSessionEnvVars {
+		t.Setenv(name, "")
+	}
 }
 
 func TestRunningUnderAgentSignals(t *testing.T) {
@@ -21,6 +23,7 @@ func TestRunningUnderAgentSignals(t *testing.T) {
 		{name: "claude code", env: "CLAUDECODE", value: "1"},
 		{name: "claude code compatibility", env: "CLAUDE_CODE", value: "true"},
 		{name: "claude session", env: "CLAUDE_CODE_SESSION_ID", value: "session-id"},
+		{name: "codex thread", env: "CODEX_THREAD_ID", value: "thread-id"},
 	}
 
 	for _, tt := range tests {

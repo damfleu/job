@@ -123,6 +123,19 @@ func TestLsJSONAutomaticForClaude(t *testing.T) {
 	assert.Equal(t, "success", views[0]["outcome"])
 }
 
+func TestLsJSONAutomaticForCodex(t *testing.T) {
+	h := newHarness(t)
+	h.run("run", "-f", "true")
+
+	r := h.runWithEnv(map[string]string{"CODEX_THREAD_ID": "thread-id"}, "list")
+	assert.Equal(t, 0, r.exitCode)
+
+	var views []map[string]any
+	require.NoError(t, json.Unmarshal([]byte(r.stdout), &views))
+	require.Len(t, views, 1)
+	assert.Equal(t, "success", views[0]["outcome"])
+}
+
 func TestShowAutomaticJSONCanBeDisabled(t *testing.T) {
 	h := newHarness(t)
 	h.run("run", "-f", "true")
