@@ -63,6 +63,45 @@ func (d *DB) ListCompletedBeforeByContextRegex(t time.Time, limit int, filter, c
 	return d.listCompleted(limit, filter, contextRegex, true, &t)
 }
 
+// ListCompletedSince returns completed jobs stopped at or after t, ordered by
+// completion time. Unlike ListCompleted, it is intentionally unlimited: its
+// primary caller advances the cutoff after each successful refresh.
+func (d *DB) ListCompletedSince(t time.Time, filter, context string) ([]*model.Job, error) {
+	return d.listCompletedSince(t, filter, context, false)
+}
+
+// ListCompletedSinceByContextRegex is the context-regex variant of
+// ListCompletedSince.
+func (d *DB) ListCompletedSinceByContextRegex(t time.Time, filter, contextRegex string) ([]*model.Job, error) {
+	return d.listCompletedSince(t, filter, contextRegex, true)
+}
+
+func (d *DB) listCompletedSince(t time.Time, filter, context string, contextIsRegex bool) ([]*model.Job, error) {
+	query := `SELECT ` + jobCols + ` FROM jobs
+		WHERE status = 'completed' AND julianday(stopped_at) >= julianday(?)`
+	args := []any{t.UTC().Format(time.RFC3339Nano)}
+	if filter != "" {
+		query += ` AND cmd_str(command) REGEXP ?`
+		args = append(args, filter)
+	}
+	if context != "" {
+		if contextIsRegex {
+			query += ` AND COALESCE(context, '') REGEXP ?`
+		} else {
+			query += ` AND context = ?`
+		}
+		args = append(args, context)
+	}
+	query += ` ORDER BY julianday(stopped_at), key`
+
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("db: list completed since: %w", err)
+	}
+	defer rows.Close()
+	return scanJobs(rows)
+}
+
 func (d *DB) listCompleted(limit int, filter, context string, contextIsRegex bool, stoppedBefore *time.Time) ([]*model.Job, error) {
 	if limit < 0 {
 		return nil, fmt.Errorf("db: list completed: limit cannot be negative")

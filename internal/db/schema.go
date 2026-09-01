@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE INDEX IF NOT EXISTS idx_jobs_status  ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_stopped ON jobs(stopped_at);
+-- Matches ListCompletedSince's filter and ordering so watch refreshes can seek
+-- directly to the completion cutoff instead of scanning all completed jobs.
+CREATE INDEX IF NOT EXISTS idx_jobs_completed_stopped_jd
+    ON jobs(status, julianday(stopped_at), key)
+    WHERE status = 'completed';
 
 CREATE TABLE IF NOT EXISTS sequences (
     name       TEXT PRIMARY KEY,

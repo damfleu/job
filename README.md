@@ -37,6 +37,8 @@ job retry <key>
 
 # List jobs (defaults to running jobs, all jobs otherwise)
 job list
+# Continuously watch jobs and their dependency workflows
+job watch
 # Show details about a job
 job show <key>
 # Show output of a job
@@ -59,6 +61,16 @@ Special keys refer to jobs by recency instead of by name, scoped to the current 
 You can also omit the key for `job log`, `job show`, and `job stop` to default to the last running job, and for `job retry` to default to the last completed job — falling back to `.` if no job of that status exists. `job rm` accepts explicit key or alias arguments; with no arguments, it reads whitespace-separated job keys from stdin.
 
 Run `job --help` or `job <command> --help` for full usage.
+
+### Watch dashboard
+
+`job watch` opens a read-only live view of jobs and dependency workflows. It
+uses the current context by default; pass `--since` to include recent history.
+Use `q` or Ctrl-C to exit.
+
+```sh
+job watch --since 1h
+```
 
 ## Concepts
 

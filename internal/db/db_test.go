@@ -124,6 +124,49 @@ func TestInsertGetOptionalFields(t *testing.T) {
 	assert.Equal(t, model.DepAfterSuccess, got.Deps[1].Kind)
 }
 
+func TestListCompletedSince(t *testing.T) {
+	d := openMemDB(t)
+	cutoff := time.Date(2026, time.August, 13, 10, 0, 0, 500_000_000, time.UTC)
+
+	insertCompleted := func(key, command, context string, stoppedAt time.Time) {
+		t.Helper()
+		j := makeJob(key)
+		j.Command = []string{"echo", command}
+		j.Context = context
+		j.Status = model.StatusCompleted
+		j.Reason = model.ReasonExited
+		j.ExitCode = new(0)
+		j.StartedAt = new(stoppedAt.Add(-time.Second))
+		j.StoppedAt = new(stoppedAt)
+		require.NoError(t, d.Insert(j))
+	}
+
+	insertCompleted("before", "keep", "project-a", cutoff.Add(-time.Millisecond))
+	insertCompleted("boundary", "keep", "project-a", cutoff)
+	insertCompleted("after", "keep", "project-b", cutoff.Add(time.Millisecond))
+	insertCompleted("filtered", "drop", "project-a", cutoff.Add(2*time.Millisecond))
+
+	jobs, err := d.ListCompletedSince(cutoff, "", "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"boundary", "after", "filtered"}, jobKeysForDBTest(jobs))
+
+	jobs, err = d.ListCompletedSince(cutoff, "keep", "project-a")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"boundary"}, jobKeysForDBTest(jobs))
+
+	jobs, err = d.ListCompletedSinceByContextRegex(cutoff, "keep", `^project-[ab]$`)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"boundary", "after"}, jobKeysForDBTest(jobs))
+}
+
+func jobKeysForDBTest(jobs []*model.Job) []string {
+	keys := make([]string, len(jobs))
+	for i, j := range jobs {
+		keys[i] = j.Key
+	}
+	return keys
+}
+
 func TestUpdate(t *testing.T) {
 	db := openMemDB(t)
 	job := makeJob("key3")
