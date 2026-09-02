@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -513,7 +514,7 @@ func watchNodeLabel(node *watchTreeNode, byKey map[string]*model.Job, showContex
 	if j.ExitCode != nil && j.Status == model.StatusCompleted {
 		parts = append(parts, fmt.Sprintf("rc=%d", *j.ExitCode))
 	}
-	parts = append(parts, strings.Join(j.Command, " "))
+	parts = append(parts, watchCommandText(j.Command))
 
 	var details []string
 	if node.parentKind != "" {
@@ -538,6 +539,40 @@ func watchNodeLabel(node *watchTreeNode, byKey map[string]*model.Job, showContex
 		parts = append(parts, "("+strings.Join(details, "; ")+")")
 	}
 	return strings.Join(parts, "  ")
+}
+
+func watchCommandText(command []string) string {
+	args := make([]string, len(command))
+	for i, arg := range command {
+		args[i] = watchSanitizeText(arg)
+	}
+	return strings.Join(args, " ")
+}
+
+func watchSanitizeText(s string) string {
+	if strings.IndexFunc(s, unicode.IsControl) == -1 {
+		return s
+	}
+
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if !unicode.IsControl(r) {
+			b.WriteRune(r)
+			continue
+		}
+		switch r {
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			b.WriteString(`\r`)
+		case '\t':
+			b.WriteString(`\t`)
+		default:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		}
+	}
+	return b.String()
 }
 
 func watchDepName(key string, byKey map[string]*model.Job) string {

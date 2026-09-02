@@ -168,6 +168,32 @@ func TestWatchForestRendersDependenciesOnceAndDeterministically(t *testing.T) {
 	assert.Contains(t, first, "waiting for lint")
 }
 
+func TestWatchForestSanitizesCommandControlCharacters(t *testing.T) {
+	now := time.Now().UTC()
+	j := watchTestJob("unsafe-key", "unsafe", model.StatusRunning, now)
+	j.Command = []string{
+		"printf",
+		"first\nsecond",
+		"tab\tvalue",
+		"\x1b[31mred\x1b[0m",
+		"bell\a",
+		`plain\path`,
+	}
+
+	lines := watchForestLines([]*model.Job{j}, now)
+	require.Len(t, lines, 1)
+	line := lines[0]
+	assert.Contains(t, line, `first\nsecond`)
+	assert.Contains(t, line, `tab\tvalue`)
+	assert.Contains(t, line, `\x1b[31mred\x1b[0m`)
+	assert.Contains(t, line, `bell\x07`)
+	assert.Contains(t, line, `plain\path`)
+	assert.NotContains(t, line, "\n")
+	assert.NotContains(t, line, "\t")
+	assert.NotContains(t, line, "\x1b[31mred\x1b[0m")
+	assert.NotContains(t, line, "\a")
+}
+
 func TestWatchForestPrioritizesActiveThenSortsCompletedByLatestActivity(t *testing.T) {
 	now := time.Now().UTC()
 	running := watchTestJob("active-key", "active", model.StatusRunning, now.Add(-time.Minute))
