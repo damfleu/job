@@ -9,5 +9,9 @@ job
 .idea/
 .vscode/
 
+# Python caches
+__pycache__/
+*.py[cod]
+
 # macOS
 .DS_Store

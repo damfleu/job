@@ -1,0 +1,20 @@
+id = "job.watch"
+name = "Agent Job Watch"
+version = "0.1.0"
+min_herdr_version = "0.8.2"
+description = "Toggle a small job watch pane for the focused Codex or Claude session"
+platforms = ["macos", "linux"]
+
+[[actions]]
+id = "toggle"
+title = "Toggle agent job watch"
+description = "Open or close job watch for the focused agent session"
+contexts = ["pane"]
+command = ["python3", "job_watch.py", "toggle"]
+
+[[panes]]
+id = "watch"
+title = "job watch"
+description = "Live jobs for one Codex or Claude session"
+placement = "split"
+command = ["python3", "job_watch.py", "watch"]
