@@ -58,6 +58,23 @@ func TestJobList(t *testing.T) {
 	assert.Contains(t, r.stdout, "echo first")
 	assert.Contains(t, r.stdout, "echo second")
 	assert.Contains(t, r.stdout, "COMMAND") // table header
+	assert.Contains(t, r.stdout, "succeeded")
+}
+
+func TestJobListActiveUsesWatchStyleForest(t *testing.T) {
+	h := newHarness(t)
+	run := h.run("run", "-k", "nap", "sleep", "60")
+	runningKey := strings.TrimSpace(run.stderr)
+	require.NotEmpty(t, runningKey)
+	h.waitFor(runningKey, model.StatusRunning)
+	t.Cleanup(func() { h.run("stop", runningKey) })
+
+	r := h.run("list", "--json=false")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Contains(t, r.stdout, "● running")
+	assert.Contains(t, r.stdout, "nap")
+	assert.Contains(t, r.stdout, "sleep 60")
+	assert.NotContains(t, r.stdout, "COMMAND")
 }
 
 func TestJobListFilter(t *testing.T) {

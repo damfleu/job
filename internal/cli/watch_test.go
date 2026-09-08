@@ -75,6 +75,21 @@ func TestWatchDepFailedAndStoppedAreSticky(t *testing.T) {
 
 	m.applySnapshot(watchSnapshot{jobs: []*model.Job{depFailed, stopped}})
 	assert.ElementsMatch(t, []string{"dep", "stopped"}, watchObservedKeys(m))
+	assert.Contains(t, m.header(), "1 skipped")
+	assert.NotContains(t, m.header(), "dep-failed")
+}
+
+func TestJobForestUsesHumanOutcomeLabels(t *testing.T) {
+	now := time.Now().UTC()
+	succeeded := completeWatchJob(watchTestJob("success-key", "success", model.StatusPending, now), 0, now)
+	skipped := watchTestJob("skipped-key", "skipped", model.StatusCompleted, now)
+	skipped.Reason = model.ReasonDepFailed
+	skipped.StoppedAt = new(now)
+
+	output := strings.Join(jobForestLines([]*model.Job{succeeded, skipped}, now), "\n")
+	assert.Contains(t, output, "✓ succeeded")
+	assert.Contains(t, output, "⊘ skipped")
+	assert.NotContains(t, output, "dep-failed")
 }
 
 func TestWatchRefreshErrorPreservesLastSnapshot(t *testing.T) {
@@ -159,13 +174,47 @@ func TestWatchForestRendersDependenciesOnceAndDeterministically(t *testing.T) {
 	}
 
 	jobs := []*model.Job{testJob, lint, build}
-	first := strings.Join(watchForestLines(jobs, now), "\n")
-	second := strings.Join(watchForestLines(jobs, now), "\n")
+	first := strings.Join(jobForestLines(jobs, now), "\n")
+	second := strings.Join(jobForestLines(jobs, now), "\n")
 	assert.Equal(t, first, second)
 	assert.Equal(t, 1, strings.Count(first, "echo test-key"))
-	assert.Contains(t, first, "after-success")
-	assert.Contains(t, first, "also after lint")
-	assert.Contains(t, first, "waiting for lint")
+	assert.Contains(t, first, "└──")
+	assert.Contains(t, first, "◌ after-ok")
+	assert.Contains(t, first, "(+ lint)")
+	assert.NotContains(t, first, "waiting for")
+}
+
+func TestJobForestMarksMissingDependenciesCompactly(t *testing.T) {
+	now := time.Now().UTC()
+	j := watchTestJob("blocked-key", "blocked", model.StatusBlocked, now)
+	j.Deps = []model.Dep{{Key: "missing", Kind: model.DepAfterSuccess}}
+
+	output := strings.Join(jobForestLines([]*model.Job{j}, now), "\n")
+	assert.Contains(t, output, "◌ after-ok")
+	assert.Contains(t, output, "(? missing)")
+	assert.NotContains(t, output, "waiting for")
+}
+
+func TestJobForestUsesDependencyKindWhileBlocked(t *testing.T) {
+	now := time.Now().UTC()
+	for _, tt := range []struct {
+		name string
+		kind model.DepKind
+		want string
+	}{
+		{name: "after", kind: model.DepAfter, want: "◌ after"},
+		{name: "after success", kind: model.DepAfterSuccess, want: "◌ after-ok"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			parent := watchTestJob("parent-key", "parent", model.StatusRunning, now)
+			child := watchTestJob("child-key", "child", model.StatusBlocked, now)
+			child.Deps = []model.Dep{{Key: parent.Key, Kind: tt.kind}}
+
+			output := strings.Join(jobForestLines([]*model.Job{parent, child}, now), "\n")
+			assert.Contains(t, output, tt.want)
+			assert.NotContains(t, output, "◌ blocked")
+		})
+	}
 }
 
 func TestWatchForestSanitizesCommandControlCharacters(t *testing.T) {
@@ -180,7 +229,7 @@ func TestWatchForestSanitizesCommandControlCharacters(t *testing.T) {
 		`plain\path`,
 	}
 
-	lines := watchForestLines([]*model.Job{j}, now)
+	lines := jobForestLines([]*model.Job{j}, now)
 	require.Len(t, lines, 1)
 	line := lines[0]
 	assert.Contains(t, line, `first\nsecond`)
@@ -200,7 +249,7 @@ func TestWatchForestPrioritizesActiveThenSortsCompletedByLatestActivity(t *testi
 	failed := completeWatchJob(watchTestJob("failed-key", "failed", model.StatusPending, now.Add(-time.Minute)), 1, now.Add(-30*time.Second))
 	success := completeWatchJob(watchTestJob("success-key", "success", model.StatusPending, now.Add(-time.Minute)), 0, now)
 
-	output := strings.Join(watchForestLines([]*model.Job{success, failed, running}, now), "\n")
+	output := strings.Join(jobForestLines([]*model.Job{success, failed, running}, now), "\n")
 	assert.Less(t, strings.Index(output, "echo active-key"), strings.Index(output, "echo success-key"))
 	assert.Less(t, strings.Index(output, "echo success-key"), strings.Index(output, "echo failed-key"))
 }
@@ -234,9 +283,9 @@ func TestWatchIdleAndMixedContexts(t *testing.T) {
 	a := watchTestJob("a", "a", model.StatusRunning, now)
 	b := watchTestJob("b", "b", model.StatusRunning, now)
 	b.Context = "project-b"
-	output := strings.Join(watchForestLines([]*model.Job{a, b}, now), "\n")
-	assert.Contains(t, output, watchContextStyle.Render("[project-a]"))
-	assert.Contains(t, output, watchContextStyle.Render("[project-b]"))
+	output := strings.Join(jobForestLines([]*model.Job{a, b}, now), "\n")
+	assert.Contains(t, output, jobForestContextStyle.Render("[project-a]"))
+	assert.Contains(t, output, jobForestContextStyle.Render("[project-b]"))
 }
 
 func TestWatchQuitKeysAndResize(t *testing.T) {

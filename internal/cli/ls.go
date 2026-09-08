@@ -8,14 +8,12 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"charm.land/lipgloss/v2/tree"
 	"github.com/charmbracelet/x/term"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 
 	"job/internal/config"
-	"job/internal/db"
 	"job/internal/model"
 )
 
@@ -146,12 +144,18 @@ var lsCmd = &cobra.Command{
 			return nil
 		}
 
-		// active jobs only: tree
+		// Active jobs use the same dependency forest as watch.
 		all, err := expandDeps(globalDB, active)
 		if err != nil {
 			return err
 		}
-		fmt.Print(renderTree(all))
+		lines := jobForestLines(all, time.Now())
+		if term.IsTerminal(os.Stdout.Fd()) {
+			if width, _, err := term.GetSize(os.Stdout.Fd()); err == nil {
+				truncateTerminalLines(lines, width)
+			}
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), strings.Join(lines, "\n"))
 		return nil
 	},
 }
@@ -168,104 +172,6 @@ func init() {
 	lsCmd.MarkFlagsMutuallyExclusive("any", "context")
 	lsCmd.MarkFlagsMutuallyExclusive("json", "keys")
 	rootCmd.AddCommand(lsCmd)
-}
-
-// renderTree builds a lipgloss tree from a set of active jobs and returns the rendered string.
-func renderTree(jobs []*model.Job) string {
-	showContext := hasMultipleContexts(jobs)
-	byKey := make(map[string]*model.Job, len(jobs))
-	for _, j := range jobs {
-		byKey[j.Key] = j
-	}
-
-	children := make(map[string][]*model.Job)
-	isChild := make(map[string]bool)
-	for _, j := range jobs {
-		for _, dep := range j.Deps {
-			if _, active := byKey[dep.Key]; active {
-				children[dep.Key] = append(children[dep.Key], j)
-				isChild[j.Key] = true
-			}
-		}
-	}
-
-	var roots []*model.Job
-	for _, j := range jobs {
-		if !isChild[j.Key] {
-			roots = append(roots, j)
-		}
-	}
-
-	var buildNode func(j *model.Job) *tree.Tree
-	buildNode = func(j *model.Job) *tree.Tree {
-		t := tree.Root(nodeLabel(j, showContext))
-		for _, kid := range children[j.Key] {
-			t.Child(buildNode(kid))
-		}
-		return t
-	}
-
-	var parts []string
-	for _, root := range roots {
-		parts = append(parts, buildNode(root).String())
-	}
-	return strings.Join(parts, "\n") + "\n"
-}
-
-func nodeLabel(j *model.Job, showContext bool) string {
-	label := fmt.Sprintf("%s  %s  %s  %s",
-		displayKey(j),
-		jobStatusStyle(j).Render(jobStatusText(j)),
-		displayCmd(j.Command),
-		displayAge(j),
-	)
-	if showContext {
-		return fmt.Sprintf("[%s]  %s", middleEllipsisTrunc(displayContext(j), 24), label)
-	}
-	return label
-}
-
-// expandDeps augments a set of jobs with their transitive completed dependencies.
-func expandDeps(d *db.DB, seed []*model.Job) ([]*model.Job, error) {
-	byKey := make(map[string]*model.Job, len(seed))
-	for _, j := range seed {
-		byKey[j.Key] = j
-	}
-
-	var pending []string
-	for _, j := range seed {
-		for _, dep := range j.Deps {
-			if _, seen := byKey[dep.Key]; !seen {
-				byKey[dep.Key] = nil
-				pending = append(pending, dep.Key)
-			}
-		}
-	}
-
-	for len(pending) > 0 {
-		fetched, err := d.GetByKeys(pending)
-		if err != nil {
-			return nil, err
-		}
-		pending = pending[:0]
-		for _, j := range fetched {
-			byKey[j.Key] = j
-			for _, dep := range j.Deps {
-				if _, seen := byKey[dep.Key]; !seen {
-					byKey[dep.Key] = nil
-					pending = append(pending, dep.Key)
-				}
-			}
-		}
-	}
-
-	result := make([]*model.Job, 0, len(byKey))
-	for _, j := range byKey {
-		if j != nil {
-			result = append(result, j)
-		}
-	}
-	return result, nil
 }
 
 func printTable(jobs []*model.Job) {
@@ -397,10 +303,6 @@ func jobTableStyle() table.Style {
 	}
 }
 
-func displayKey(j *model.Job) string {
-	return j.Key
-}
-
 func displayKeyAlias(j *model.Job) string {
 	if j.Alias != "" {
 		return j.Alias
@@ -448,43 +350,22 @@ func displayDuration(j *model.Job) string {
 	return end.Sub(*j.StartedAt).Round(time.Millisecond).String()
 }
 
-func displayAge(j *model.Job) string {
-	var t time.Time
-	if j.StartedAt != nil {
-		t = *j.StartedAt
-	} else {
-		t = j.CreatedAt
-	}
-	return age(t)
-}
-
-func age(t time.Time) string {
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	}
-}
-
-// jobStatusText returns the display text for the STATUS column.
-// Completed jobs show their reason instead of "completed".
+// jobStatusText returns the human-facing lifecycle or outcome label shared by
+// job views. Stable machine values remain available through JSON.
 func jobStatusText(j *model.Job) string {
-	if j.Status == model.StatusCompleted {
-		if j.Reason == model.ReasonExited {
-			if j.ExitCode != nil && *j.ExitCode == 0 {
-				return "completed"
-			}
-			return "failed"
-		}
-		return string(j.Reason)
+	if j.Status != model.StatusCompleted {
+		return string(j.Status)
 	}
-	return string(j.Status)
+	switch jobOutcome(j) {
+	case "success":
+		return "succeeded"
+	case "dep_failed":
+		return "skipped"
+	case "stopped":
+		return "stopped"
+	default:
+		return "failed"
+	}
 }
 
 // jobStatusStyle returns the color for the STATUS column.

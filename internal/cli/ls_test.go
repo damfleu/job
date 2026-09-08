@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -84,11 +85,11 @@ func TestJobStatusText(t *testing.T) {
 		{"running", &model.Job{Status: model.StatusRunning}, "running"},
 		{"blocked", &model.Job{Status: model.StatusBlocked}, "blocked"},
 		{"pending", &model.Job{Status: model.StatusPending}, "pending"},
-		{"exited rc=0", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited, ExitCode: &rc0}, "completed"},
+		{"exited rc=0", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited, ExitCode: &rc0}, "succeeded"},
 		{"exited rc=1", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited, ExitCode: &rc1}, "failed"},
 		{"exited no rc", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonExited}, "failed"},
 		{"stopped", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonStopped}, "stopped"},
-		{"dep_failed", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonDepFailed}, "dep_failed"},
+		{"dep_failed", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonDepFailed}, "skipped"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -117,16 +118,17 @@ func TestHasMultipleContexts(t *testing.T) {
 	}
 }
 
-func TestRenderTreeShowsContextOnlyForMixedContexts(t *testing.T) {
+func TestJobForestShowsContextOnlyForMixedContexts(t *testing.T) {
 	one := makeTestJob("one", model.StatusRunning)
 	one.Context = "project-a"
 	two := makeTestJob("two", model.StatusRunning)
 	two.Context = "project-b"
+	now := time.Now()
 
-	single := renderTree([]*model.Job{one})
+	single := strings.Join(jobForestLines([]*model.Job{one}, now), "\n")
 	assert.NotContains(t, single, "[project-a]")
 
-	mixed := renderTree([]*model.Job{one, two})
+	mixed := strings.Join(jobForestLines([]*model.Job{one, two}, now), "\n")
 	assert.Contains(t, mixed, "[project-a]")
 	assert.Contains(t, mixed, "[project-b]")
 }
