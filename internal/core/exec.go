@@ -60,7 +60,7 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
-		return markFailed(store, j, err)
+		return markLaunchFailed(store, j, fmt.Errorf("starting command: %w", err))
 	}
 
 	j.Status = model.StatusRunning
@@ -108,11 +108,15 @@ func markDepFailed(store db.JobStore, j *model.Job) error {
 	return nil
 }
 
-func markFailed(store db.JobStore, j *model.Job, startErr error) error {
+func markLaunchFailed(store db.JobStore, j *model.Job, launchErr error) error {
 	j.Status = model.StatusCompleted
-	j.Reason = model.ReasonExited
+	j.Reason = model.ReasonLaunchFailed
 	j.ExitCode = new(1)
 	j.StoppedAt = new(time.Now().UTC())
-	_ = store.Update(j) // best-effort: returning the start error is more informative
-	return fmt.Errorf("starting command: %w", startErr)
+	j.PID = 0
+	j.PGID = 0
+	if err := store.Update(j); err != nil {
+		return errors.Join(launchErr, fmt.Errorf("recording launch failure: %w", err))
+	}
+	return launchErr
 }

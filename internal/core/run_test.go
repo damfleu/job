@@ -135,6 +135,31 @@ func TestCreateAndSpawnLogCreationFailureDoesNotLeaveActiveJob(t *testing.T) {
 	assert.Empty(t, active, "a launch failure must not leave a pending or running job")
 }
 
+func TestCreateAndSpawnChildStartFailureTerminalizesJob(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	originalExecutable := os.Args[0]
+	os.Args[0] = filepath.Join(t.TempDir(), "missing-job-executable")
+	t.Cleanup(func() { os.Args[0] = originalExecutable })
+
+	_, err := CreateAndSpawn(store, stateDir, []string{"echo", "should not run"}, RunOptions{})
+	require.ErrorContains(t, err, "spawning background job")
+
+	key, err := store.GetLastKeyForContext("")
+	require.NoError(t, err)
+	require.NotEmpty(t, key, "the job should have been inserted before child startup failed")
+
+	j, err := store.Get(key)
+	require.NoError(t, err)
+	assert.Equal(t, model.StatusCompleted, j.Status)
+	assert.Equal(t, model.ReasonLaunchFailed, j.Reason)
+	assert.NotNil(t, j.StoppedAt)
+	require.NotNil(t, j.ExitCode)
+	assert.Equal(t, 1, *j.ExitCode)
+	assert.Zero(t, j.PID)
+	assert.Zero(t, j.PGID)
+}
+
 func TestCreateAndRunForegroundLogCreationFailureDoesNotLeaveActiveJob(t *testing.T) {
 	store, stateDir := setupRun(t)
 

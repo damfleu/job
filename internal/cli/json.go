@@ -51,6 +51,8 @@ func jobOutcome(j *model.Job) string {
 			return "success"
 		}
 		return "failed"
+	case model.ReasonLaunchFailed:
+		return "failed"
 	default:
 		return string(j.Reason)
 	}

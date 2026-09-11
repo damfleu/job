@@ -119,7 +119,7 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 
 	if err := cmd.Start(); err != nil {
 		signal.Stop(signals)
-		return 0, markFailed(store, j, err)
+		return 0, markLaunchFailed(store, j, fmt.Errorf("starting command: %w", err))
 	}
 	restorePending := ownsTerminal
 	if restorePending {
@@ -248,7 +248,7 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 	child.Stderr = lf
 	if err := child.Start(); err != nil {
 		lf.Close()
-		return "", fmt.Errorf("spawning background job: %w", err)
+		return "", markLaunchFailed(store, j, fmt.Errorf("spawning background job: %w", err))
 	}
 	lf.Close()
 

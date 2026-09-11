@@ -19,9 +19,10 @@ const (
 type Reason string
 
 const (
-	ReasonExited    Reason = "exited"
-	ReasonStopped   Reason = "stopped"
-	ReasonDepFailed Reason = "dep_failed"
+	ReasonExited       Reason = "exited"
+	ReasonStopped      Reason = "stopped"
+	ReasonDepFailed    Reason = "dep_failed"
+	ReasonLaunchFailed Reason = "launch_failed"
 )
 
 // Job is the record for a single tracked job.
