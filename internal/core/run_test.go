@@ -120,6 +120,34 @@ func TestForegroundRecordsMetadata(t *testing.T) {
 	assert.Equal(t, []string{"echo", "hi"}, j.Command)
 }
 
+func TestCreateAndSpawnLogCreationFailureDoesNotLeaveActiveJob(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	// Make the log root a regular file so logfile.Create cannot create the
+	// sharded directory for the new job.
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "log"), []byte("not a directory"), 0o600))
+
+	_, err := CreateAndSpawn(store, stateDir, []string{"echo", "should not run"}, RunOptions{})
+	require.Error(t, err)
+
+	active, err := store.ListActive("", "")
+	require.NoError(t, err)
+	assert.Empty(t, active, "a launch failure must not leave a pending or running job")
+}
+
+func TestCreateAndRunForegroundLogCreationFailureDoesNotLeaveActiveJob(t *testing.T) {
+	store, stateDir := setupRun(t)
+
+	require.NoError(t, os.WriteFile(filepath.Join(stateDir, "log"), []byte("not a directory"), 0o600))
+
+	_, err := CreateAndRunForeground(store, stateDir, []string{"echo", "should not run"}, RunOptions{})
+	require.Error(t, err)
+
+	active, err := store.ListActive("", "")
+	require.NoError(t, err)
+	assert.Empty(t, active, "a launch failure must not leave a pending or running job")
+}
+
 func TestForegroundCanBeStopped(t *testing.T) {
 	store, stateDir := setupRun(t)
 

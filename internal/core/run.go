@@ -62,6 +62,12 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		Automated: opts.Automated,
 	}
 
+	lf, err := logfile.Create(stateDir, key)
+	if err != nil {
+		return 0, err
+	}
+	defer lf.Close()
+
 	if err := store.Insert(j); err != nil {
 		return 0, err
 	}
@@ -92,12 +98,6 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		}
 		j = current
 	}
-
-	lf, err := logfile.Create(stateDir, key)
-	if err != nil {
-		return 0, err
-	}
-	defer lf.Close()
 
 	cmd := exec.Command(command[0], command[1:]...)
 	cmd.Dir = workDir
@@ -228,13 +228,13 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 		Automated: opts.Automated,
 	}
 
-	if err := store.Insert(j); err != nil {
-		return "", err
-	}
-
 	// pre-create the log file so it exists before __exec opens it
 	lf, err := logfile.Create(stateDir, key)
 	if err != nil {
+		return "", err
+	}
+	if err := store.Insert(j); err != nil {
+		lf.Close()
 		return "", err
 	}
 
