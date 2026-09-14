@@ -381,7 +381,7 @@ func jobStatusStyle(j *model.Job) lipgloss.Style {
 			return lipgloss.NewStyle().Foreground(lipgloss.Color("208"))
 		case model.ReasonDepFailed:
 			return lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-		case model.ReasonLaunchFailed:
+		case model.ReasonLaunchFailed, model.ReasonInternalError:
 			return lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
 		case model.ReasonExited:
 			if j.ExitCode != nil && *j.ExitCode != 0 {

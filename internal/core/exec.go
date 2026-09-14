@@ -31,25 +31,30 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 			if errors.Is(err, ErrDepFailed) {
 				return markDepFailed(store, j)
 			}
-			return err
+			return markInternalError(store, j, err)
 		}
 
 		// Re-read in case the job was stopped while waiting for deps.
-		j, err = store.Get(key)
+		current, err := store.Get(key)
 		if err != nil {
-			return err
+			return markInternalError(
+				store,
+				j,
+				fmt.Errorf("reloading job after dependencies: %w", err),
+			)
 		}
+		j = current
 		if j.Status == model.StatusCompleted {
 			return nil
 		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(j.LogFile), permissions.DirMode); err != nil {
-		return fmt.Errorf("creating log dir: %w", err)
+		return markInternalError(store, j, fmt.Errorf("creating log dir: %w", err))
 	}
 	lf, err := os.OpenFile(j.LogFile, os.O_WRONLY|os.O_CREATE|os.O_APPEND, permissions.FileMode)
 	if err != nil {
-		return fmt.Errorf("opening log file: %w", err)
+		return markInternalError(store, j, fmt.Errorf("opening log file: %w", err))
 	}
 	defer lf.Close()
 
@@ -119,4 +124,17 @@ func markLaunchFailed(store db.JobStore, j *model.Job, launchErr error) error {
 		return errors.Join(launchErr, fmt.Errorf("recording launch failure: %w", err))
 	}
 	return launchErr
+}
+
+func markInternalError(store db.JobStore, j *model.Job, internalErr error) error {
+	j.Status = model.StatusCompleted
+	j.Reason = model.ReasonInternalError
+	j.ExitCode = nil
+	j.StoppedAt = new(time.Now().UTC())
+	j.PID = 0
+	j.PGID = 0
+	if err := store.Update(j); err != nil {
+		return errors.Join(internalErr, fmt.Errorf("recording internal error: %w", err))
+	}
+	return internalErr
 }

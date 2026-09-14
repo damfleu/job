@@ -91,6 +91,7 @@ func TestJobStatusText(t *testing.T) {
 		{"stopped", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonStopped}, "stopped"},
 		{"dep_failed", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonDepFailed}, "skipped"},
 		{"launch_failed", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonLaunchFailed}, "failed"},
+		{"internal_error", &model.Job{Status: model.StatusCompleted, Reason: model.ReasonInternalError}, "failed"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
