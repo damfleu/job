@@ -187,6 +187,10 @@ program = "osascript -e 'display notification …'"
 notify  = "explicit"
 ```
 
+Unknown settings and invalid values are rejected when any command starts. List
+limits must be non-negative, notifier programs must be non-empty, and notifier
+modes must be `always` or `explicit`.
+
 **Environment variables:**
 
 | Variable | Default | Description |

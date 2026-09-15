@@ -56,6 +56,10 @@ var rootCmd = &cobra.Command{
 		return cmd.Help()
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := config.Load(filepath.Join(configDir(), "config.toml"))
+		if err != nil {
+			return fmt.Errorf("loading config: %w", err)
+		}
 		dir := filepath.Join(stateDir(), "db")
 		if err := os.MkdirAll(dir, permissions.DirMode); err != nil {
 			return fmt.Errorf("creating state dir: %w", err)
@@ -65,10 +69,6 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("opening db: %w", err)
 		}
 		globalDB = d
-		cfg, err := config.Load(filepath.Join(configDir(), "config.toml"))
-		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
-		}
 		globalConfig = cfg
 		return nil
 	},

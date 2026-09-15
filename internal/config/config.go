@@ -2,7 +2,9 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -37,13 +39,44 @@ func Default() Config {
 	}
 }
 
+// Validate checks constraints that TOML decoding alone cannot enforce.
+func (c Config) Validate() error {
+	if c.List.Limit < 0 {
+		return fmt.Errorf("list.limit cannot be negative")
+	}
+	for i, notifier := range c.Notifiers {
+		if strings.TrimSpace(notifier.Program) == "" {
+			return fmt.Errorf("notifier[%d].program cannot be empty", i)
+		}
+		switch notifier.Notify {
+		case "", "always", "explicit":
+		default:
+			return fmt.Errorf("notifier[%d].notify must be %q or %q, got %q", i, "always", "explicit", notifier.Notify)
+		}
+	}
+	return nil
+}
+
 // Load reads the TOML file at path into a Config, starting from Default().
 // If the file does not exist, the default Config is returned with no error.
 func Load(path string) (Config, error) {
 	cfg := Default()
-	_, err := toml.DecodeFile(path, &cfg)
+	metadata, err := toml.DecodeFile(path, &cfg)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return cfg, nil
 	}
-	return cfg, err
+	if err != nil {
+		return cfg, err
+	}
+	if undecoded := metadata.Undecoded(); len(undecoded) > 0 {
+		keys := make([]string, len(undecoded))
+		for i, key := range undecoded {
+			keys[i] = key.String()
+		}
+		return cfg, fmt.Errorf("unknown configuration keys: %s", strings.Join(keys, ", "))
+	}
+	if err := cfg.Validate(); err != nil {
+		return cfg, err
+	}
+	return cfg, nil
 }

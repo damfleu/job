@@ -150,6 +150,17 @@ func withoutAgentEnvironment(env []string) []string {
 	return filtered
 }
 
+func TestInvalidConfigFailsBeforeCommandExecution(t *testing.T) {
+	h := newHarness(t)
+	h.writeConfig("[list]\nlimit = -1\n")
+
+	r := h.run("show", "does-not-exist")
+
+	require.Equal(t, 1, r.exitCode)
+	require.Contains(t, r.stderr, "error: loading config: list.limit cannot be negative")
+	require.NotContains(t, r.stderr, "does-not-exist")
+}
+
 // waitFor polls until the job reaches the expected status or the test times out.
 func (h *harness) waitFor(key string, status model.Status) {
 	h.t.Helper()
