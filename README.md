@@ -181,15 +181,19 @@ resolvers = [
 [[notifier]]
 program = "notify-send"
 notify  = "always"    # "always" | "explicit" (default; requires -n)
+timeout = "2s"        # optional; defaults to 2s
 
 [[notifier]]
 program = "osascript -e 'display notification …'"
 notify  = "explicit"
+timeout = "5s"
 ```
 
 Unknown settings and invalid values are rejected when any command starts. List
 limits must be non-negative, notifier programs must be non-empty, and notifier
-modes must be `always` or `explicit`.
+modes must be `always` or `explicit`. Notifiers run sequentially; each has a
+2-second default timeout. Failures are recorded in `$JOB_STATE_DIR/notifier.log`
+without changing the command's result; per-job command logs remain unchanged.
 
 **Environment variables:**
 

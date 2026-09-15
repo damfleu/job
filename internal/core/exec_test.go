@@ -37,7 +37,7 @@ func TestRunBackgroundSuccess(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"echo", "bg output"})
 
-	require.NoError(t, RunBackground(store, j.Key, nil))
+	require.NoError(t, RunBackground(store, stateDir, j.Key, nil))
 
 	got, err := store.Get(j.Key)
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestRunBackgroundNonZeroExit(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"false"})
 
-	require.NoError(t, RunBackground(store, j.Key, nil))
+	require.NoError(t, RunBackground(store, stateDir, j.Key, nil))
 
 	got, err := store.Get(j.Key)
 	require.NoError(t, err)
@@ -66,7 +66,7 @@ func TestRunBackgroundLogFile(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"echo", "hello from bg"})
 
-	require.NoError(t, RunBackground(store, j.Key, nil))
+	require.NoError(t, RunBackground(store, stateDir, j.Key, nil))
 
 	content, err := os.ReadFile(j.LogFile)
 	require.NoError(t, err)
@@ -80,7 +80,7 @@ func TestRunBackgroundRecordsPGID(t *testing.T) {
 	store, stateDir := setupRun(t)
 	j := pendingJob(t, store, stateDir, []string{"echo", "pgid test"})
 
-	require.NoError(t, RunBackground(store, j.Key, nil))
+	require.NoError(t, RunBackground(store, stateDir, j.Key, nil))
 
 	got, err := store.Get(j.Key)
 	require.NoError(t, err)
@@ -95,7 +95,7 @@ func TestRunBackgroundMissingDependencyTerminalizesJob(t *testing.T) {
 	j.Deps = []model.Dep{{Key: "missing-dependency", Kind: model.DepAfter}}
 	require.NoError(t, store.Update(j))
 
-	err := RunBackground(store, j.Key, nil)
+	err := RunBackground(store, stateDir, j.Key, nil)
 	require.ErrorContains(t, err, "fetching dep missing-dependency")
 
 	assertInternalErrorJob(t, store, j.Key)
@@ -118,7 +118,7 @@ func TestRunBackgroundDependencyRereadFailureTerminalizesJob(t *testing.T) {
 		JobStore: store,
 		failAt:   3, // initial job, dependency, then post-dependency job reread
 	}
-	err := RunBackground(failingStore, j.Key, nil)
+	err := RunBackground(failingStore, stateDir, j.Key, nil)
 	require.ErrorContains(t, err, "reloading job after dependencies")
 
 	assertInternalErrorJob(t, store, j.Key)
@@ -152,7 +152,7 @@ func TestRunBackgroundLogFailureTerminalizesJob(t *testing.T) {
 			j := pendingJob(t, store, stateDir, []string{"echo", "should not run"})
 			tt.prepareLog(t, stateDir, j)
 
-			err := RunBackground(store, j.Key, nil)
+			err := RunBackground(store, stateDir, j.Key, nil)
 			require.ErrorContains(t, err, tt.wantError)
 
 			assertInternalErrorJob(t, store, j.Key)

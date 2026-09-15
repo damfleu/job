@@ -17,7 +17,7 @@ import (
 
 // RunBackground is called by the __exec child process. It loads the job, runs the command with
 // output going to the log file, and records the result.
-func RunBackground(store db.JobStore, key string, notifiers []string) error {
+func RunBackground(store db.JobStore, stateDir, key string, notifiers []notify.Notifier) error {
 	j, err := store.Get(key)
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 	// instead of racing to overwrite it as a normal exit.
 	current, getErr := store.Get(key)
 	if getErr == nil && current.Status == model.StatusCompleted && current.Reason == model.ReasonStopped {
-		notify.Fire(notifiers, current)
+		fireNotifiers(stateDir, notifiers, current)
 		return nil
 	}
 
@@ -101,8 +101,21 @@ func RunBackground(store db.JobStore, key string, notifiers []string) error {
 
 	// Best-effort: the job completed regardless of whether we can persist the state.
 	_ = store.Update(j)
-	notify.Fire(notifiers, j)
+	fireNotifiers(stateDir, notifiers, j)
 	return nil
+}
+
+func fireNotifiers(stateDir string, notifiers []notify.Notifier, j *model.Job) {
+	if len(notifiers) == 0 {
+		return
+	}
+	notifierLog, err := notify.OpenLog(stateDir)
+	if err != nil {
+		notify.Fire(notifiers, j, nil)
+		return
+	}
+	defer notifierLog.Close()
+	notify.Fire(notifiers, j, notifierLog)
 }
 
 func markDepFailed(store db.JobStore, j *model.Job) error {

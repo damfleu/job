@@ -25,10 +25,10 @@ import (
 type RunOptions struct {
 	Alias     string
 	Deps      []model.Dep
-	WorkDir   string   // if empty, defaults to os.Getwd()
-	Notifiers []string // programs to call on completion
-	Context   string   // workspace context string
-	Automated bool     // true when spawned by a script or sequence, not a human
+	WorkDir   string            // if empty, defaults to os.Getwd()
+	Notifiers []notify.Notifier // programs to call on completion
+	Context   string            // workspace context string
+	Automated bool              // true when spawned by a script or sequence, not a human
 }
 
 // CreateAndRunForeground creates a job record, runs the command in the current process (blocking),
@@ -187,7 +187,7 @@ func CreateAndRunForeground(store db.JobStore, stateDir string, command []string
 		}
 	}
 
-	notify.Fire(opts.Notifiers, j)
+	fireNotifiers(stateDir, opts.Notifiers, j)
 
 	if runErr != nil {
 		if _, ok := errors.AsType[*exec.ExitError](runErr); ok {
@@ -239,8 +239,12 @@ func CreateAndSpawn(store db.JobStore, stateDir string, command []string, opts R
 	}
 
 	args := []string{"__exec", key}
-	for _, p := range opts.Notifiers {
-		args = append(args, "--notifier", p)
+	for _, notifier := range opts.Notifiers {
+		args = append(
+			args,
+			"--notifier", notifier.Program,
+			"--notifier-timeout", notifier.Timeout.String(),
+		)
 	}
 	child := exec.Command(os.Args[0], args...)
 	child.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

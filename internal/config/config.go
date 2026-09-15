@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -23,8 +24,9 @@ type ContextConfig struct {
 
 // NotifierConfig holds settings for a single notifier program.
 type NotifierConfig struct {
-	Program string `toml:"program"`
-	Notify  string `toml:"notify"` // "always" | "explicit"; empty means "explicit"
+	Program string        `toml:"program"`
+	Notify  string        `toml:"notify"`  // "always" | "explicit"; empty means "explicit"
+	Timeout time.Duration `toml:"timeout"` // zero uses notify.DefaultTimeout
 }
 
 // ListConfig holds settings for the list command.
@@ -47,6 +49,9 @@ func (c Config) Validate() error {
 	for i, notifier := range c.Notifiers {
 		if strings.TrimSpace(notifier.Program) == "" {
 			return fmt.Errorf("notifier[%d].program cannot be empty", i)
+		}
+		if notifier.Timeout < 0 {
+			return fmt.Errorf("notifier[%d].timeout cannot be negative", i)
 		}
 		switch notifier.Notify {
 		case "", "always", "explicit":

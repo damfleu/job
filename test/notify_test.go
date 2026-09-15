@@ -114,3 +114,39 @@ func TestNotifyExplicitRequiresFlag(t *testing.T) {
 	_, err := os.ReadFile(outFile)
 	assert.True(t, os.IsNotExist(err), "notifier should not have been called without -n")
 }
+
+func TestNotifyTimeoutContinuesAndLogsFailure(t *testing.T) {
+	h := newHarness(t)
+	secondRan := filepath.Join(t.TempDir(), "second-ran")
+	second := h.writeScript("touch " + secondRan)
+	h.writeConfig("[[notifier]]\nprogram = \"sleep 10 & wait\"\nnotify = \"always\"\ntimeout = \"50ms\"\n" +
+		"[[notifier]]\nprogram = \"" + second + "\"\nnotify = \"always\"\ntimeout = \"1s\"\n")
+
+	r := h.run("run", "true")
+	require.Equal(t, 0, r.exitCode)
+	key := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, key)
+	h.waitFor(key, model.StatusCompleted)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(secondRan); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("second notifier did not run after the first timed out")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	j, err := h.db.Get(key)
+	require.NoError(t, err)
+	require.NotNil(t, j.ExitCode)
+	assert.Equal(t, 0, *j.ExitCode, "notifier failure must not change the command outcome")
+	logData, err := os.ReadFile(j.LogFile)
+	require.NoError(t, err)
+	assert.NotContains(t, string(logData), `notifier "sleep 10 & wait"`)
+	notifierLog, err := os.ReadFile(notify.LogPath(h.stateDir))
+	require.NoError(t, err)
+	assert.Contains(t, string(notifierLog), `job="`+key+`" notifier "sleep 10 & wait" timed out after 50ms`)
+}

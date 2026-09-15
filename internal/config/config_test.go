@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -56,6 +57,21 @@ func TestLoad(t *testing.T) {
 			name:    "unsupported notifier mode is rejected",
 			content: "[[notifier]]\nprogram = \"notify-send\"\nnotify = \"explict\"\n",
 			wantErr: `notifier[0].notify must be "always" or "explicit", got "explict"`,
+		},
+		{
+			name:    "negative notifier timeout is rejected",
+			content: "[[notifier]]\nprogram = \"notify-send\"\ntimeout = \"-1s\"\n",
+			wantErr: "notifier[0].timeout cannot be negative",
+		},
+		{
+			name:    "notifier timeout is parsed",
+			content: "[[notifier]]\nprogram = \"notify-send\"\ntimeout = \"250ms\"\n",
+			want: config.Config{
+				List: config.ListConfig{Limit: 20},
+				Notifiers: []config.NotifierConfig{
+					{Program: "notify-send", Timeout: 250 * time.Millisecond},
+				},
+			},
 		},
 		{
 			name:    "supported notifier modes are accepted",

@@ -11,6 +11,7 @@ import (
 
 	"job/internal/core"
 	"job/internal/model"
+	"job/internal/notify"
 )
 
 // RunFlags holds the flags shared between the root run command and subcommands like retry that also
@@ -59,10 +60,14 @@ func buildRunOptions(command []string, workDir string, f RunFlags) (core.RunOpti
 	}
 	// Build the list of notifier programs to call when the job completes. "always" notifiers fire
 	// unconditionally; "explicit" (or unset) notifiers fire only when the user passed -n/--notify.
-	var notifiers []string
+	var notifiers []notify.Notifier
 	for _, n := range globalConfig.Notifiers {
 		if n.Notify == "always" || ((n.Notify == "" || n.Notify == "explicit") && f.Notify) {
-			notifiers = append(notifiers, n.Program)
+			timeout := n.Timeout
+			if timeout == 0 {
+				timeout = notify.DefaultTimeout
+			}
+			notifiers = append(notifiers, notify.Notifier{Program: n.Program, Timeout: timeout})
 		}
 	}
 	return core.RunOptions{
