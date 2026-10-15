@@ -50,6 +50,8 @@ job log -p <key>
 job stop <key>
 # Block until a job completes, then print its key and exit code
 job wait <key>
+# Print existing logs and follow output until the job completes
+job wait --watch <key>
 # Delete one or more completed jobs
 job rm <key>...
 ```
@@ -61,6 +63,12 @@ Special keys refer to jobs by recency instead of by name, scoped to the current 
 You can also omit the key for `job log`, `job show`, and `job stop` to default to the last running job, and for `job retry` to default to the last completed job — falling back to `.` if no job of that status exists. `job rm` accepts explicit key or alias arguments; with no arguments, it reads whitespace-separated job keys from stdin.
 
 Run `job --help` or `job <command> --help` for full usage.
+
+`job wait --watch` (or `-w`) streams a single job's log to stdout and prints
+its completion summary to stderr, preserving the usual `wait` exit code.
+It accepts at most one key; omit the key to use the last running job, falling
+back to `.` if none is running. Plain `job wait` still accepts multiple keys.
+Ctrl-C stops watching; the job keeps running.
 
 ### Watch dashboard
 
