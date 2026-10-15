@@ -120,11 +120,16 @@ func TestBackgroundJob(t *testing.T) {
 func TestQuietFlag(t *testing.T) {
 	h := newHarness(t)
 	r := h.run("run", "-q", "echo", "quiet")
+	require.Equal(t, 0, r.exitCode)
 	assert.Empty(t, r.stderr)
+	h.waitFor(h.lastJob().Key, model.StatusCompleted)
 }
 
 func TestDefaultPrintsKey(t *testing.T) {
 	h := newHarness(t)
 	r := h.run("run", "echo", "hello")
-	assert.NotEmpty(t, r.stderr)
+	require.Equal(t, 0, r.exitCode)
+	key := strings.TrimSpace(r.stderr)
+	require.NotEmpty(t, key)
+	h.waitFor(key, model.StatusCompleted)
 }

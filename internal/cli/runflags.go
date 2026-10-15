@@ -102,16 +102,12 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 		return err
 	}
 	if f.Watch {
-		j, err := globalDB.Get(key)
+		j, err := watchJob(globalDB, key, os.Stdout, 100*time.Millisecond)
 		if err != nil {
 			return err
 		}
-		exitCode, err := watchJob(key, j.LogFile)
-		if err != nil {
-			return err
-		}
-		if exitCode != 0 {
-			os.Exit(exitCode)
+		if exitCode := j.ExitCode; exitCode != nil && *exitCode != 0 {
+			os.Exit(*exitCode)
 		}
 		return nil
 	}
@@ -214,32 +210,4 @@ func addRunFlags(cmd *cobra.Command, f *RunFlags) {
 	addAnyFlag(cmd)
 	cmd.MarkFlagsMutuallyExclusive("foreground", "watch")
 	cmd.MarkFlagsMutuallyExclusive("foreground", "quiet")
-}
-
-// watchJob tails logFile to stdout, polling the DB until the job completes.
-// Returns the job's exit code.
-func watchJob(key, logFile string) (int, error) {
-	f, err := os.Open(logFile)
-	if err != nil {
-		return 0, fmt.Errorf("opening log: %w", err)
-	}
-	defer f.Close()
-
-	for {
-		if _, err := io.Copy(os.Stdout, f); err != nil {
-			return 0, err
-		}
-		j, err := globalDB.Get(key)
-		if err != nil {
-			return 0, err
-		}
-		if j.Status == model.StatusCompleted {
-			_, _ = io.Copy(os.Stdout, f)
-			if j.ExitCode != nil {
-				return *j.ExitCode, nil
-			}
-			return 0, nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
 }

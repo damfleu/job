@@ -13,10 +13,17 @@ import (
 
 const waitPollInterval = 250 * time.Millisecond
 
+var waitWatch bool
+
 var waitCmd = &cobra.Command{
 	Use:   "wait [key...]",
 	Short: "Block until one or more jobs complete",
-	Args:  cobra.ArbitraryArgs,
+	Args: func(cmd *cobra.Command, args []string) error {
+		if waitWatch && len(args) > 1 {
+			return fmt.Errorf("--watch accepts at most one job key")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		resolveCtx()
 		keys, err := resolveWaitKeys(args)
@@ -24,13 +31,22 @@ var waitCmd = &cobra.Command{
 			return err
 		}
 
-		jobs, err := core.WaitForCompletion(globalDB, keys, waitPollInterval)
+		var jobs []*model.Job
+		summary := cmd.OutOrStdout()
+		if waitWatch {
+			var j *model.Job
+			j, err = watchJob(globalDB, keys[0], cmd.OutOrStdout(), waitPollInterval)
+			jobs = []*model.Job{j}
+			summary = cmd.ErrOrStderr()
+		} else {
+			jobs, err = core.WaitForCompletion(globalDB, keys, waitPollInterval)
+		}
 		if err != nil {
 			return err
 		}
 
 		for _, j := range jobs {
-			fmt.Println(waitLine(j))
+			fmt.Fprintln(summary, waitLine(j))
 		}
 
 		if code := waitExitCode(jobs); code != 0 {
@@ -41,6 +57,7 @@ var waitCmd = &cobra.Command{
 }
 
 func init() {
+	waitCmd.Flags().BoolVarP(&waitWatch, "watch", "w", false, "print and follow a single job's log until completion (summary on stderr)")
 	addAnyFlag(waitCmd)
 	rootCmd.AddCommand(waitCmd)
 }

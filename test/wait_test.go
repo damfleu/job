@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWaitSuccess(t *testing.T) {
@@ -55,4 +56,58 @@ func TestWaitDefaultsToLastRunning(t *testing.T) {
 
 	r := h.run("wait")
 	assert.Equal(t, 0, r.exitCode)
+}
+
+func TestWaitWatchCompletedJob(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code int
+		cmd  string
+	}{
+		{"success", 0, "printf 'stdout\n'; printf 'stderr\n' >&2"},
+		{"failed", 3, "printf 'stdout\n'; printf 'stderr\n' >&2; exit 3"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			require.Equal(t, 0, h.run("run", "-k", "logged", "--", "sh", "-c", tc.cmd).exitCode)
+			require.Equal(t, tc.code, h.run("wait", "logged").exitCode)
+
+			r := h.run("wait", "--watch", "logged")
+			assert.Equal(t, tc.code, r.exitCode)
+			assert.Equal(t, "stdout\nstderr\n", r.stdout)
+			assert.Contains(t, r.stderr, tc.name)
+		})
+	}
+}
+
+func TestWaitWatchRejectsMultipleKeys(t *testing.T) {
+	h := newHarness(t)
+	for _, flag := range []string{"--watch", "-w"} {
+		// Reject the arguments before attempting to resolve either key.
+		r := h.run("wait", flag, "a", "b")
+		assert.Equal(t, 1, r.exitCode)
+		assert.Empty(t, r.stdout)
+		assert.Contains(t, r.stderr, "--watch accepts at most one job key")
+	}
+}
+
+func TestWaitWatchDefault(t *testing.T) {
+	h := newHarness(t)
+	require.Equal(t, 0, h.run("run", "--", "echo", "default output").exitCode)
+
+	r := h.run("wait", "-w")
+	assert.Equal(t, 0, r.exitCode)
+	assert.Equal(t, "default output\n", r.stdout)
+	assert.Contains(t, r.stderr, "success  rc=0")
+}
+
+func TestWaitWatchDependencyFailure(t *testing.T) {
+	h := newHarness(t)
+	require.Equal(t, 0, h.run("run", "-k", "fail", "--", "false").exitCode)
+	require.Equal(t, 0, h.run("run", "-k", "blocked", "-A", "fail", "--", "echo", "should not run").exitCode)
+
+	r := h.run("wait", "-w", "blocked")
+	assert.Equal(t, 1, r.exitCode)
+	assert.Empty(t, r.stdout)
+	assert.Contains(t, r.stderr, "dep_failed")
 }
