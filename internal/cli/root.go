@@ -56,28 +56,42 @@ var rootCmd = &cobra.Command{
 		return cmd.Help()
 	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := config.Load(filepath.Join(configDir(), "config.toml"))
-		if err != nil {
-			return fmt.Errorf("loading config: %w", err)
+		if err := loadConfig(cmd, args); err != nil {
+			return err
 		}
-		dir := filepath.Join(stateDir(), "db")
-		if err := os.MkdirAll(dir, permissions.DirMode); err != nil {
-			return fmt.Errorf("creating state dir: %w", err)
-		}
-		d, err := db.Open(filepath.Join(dir, "job.db"))
-		if err != nil {
-			return fmt.Errorf("opening db: %w", err)
-		}
-		globalDB = d
-		globalConfig = cfg
-		return nil
+		return openDatabase()
 	},
 	PersistentPostRun: func(cmd *cobra.Command, args []string) {
 		if globalDB != nil {
 			globalDB.Close()
+			globalDB = nil
 		}
 	},
 	CompletionOptions: cobra.CompletionOptions{HiddenDefaultCmd: true},
+}
+
+// loadConfig is also used as the persistent pre-run hook for commands that
+// operate on files without opening or creating the jobs database.
+func loadConfig(_ *cobra.Command, _ []string) error {
+	cfg, err := config.Load(filepath.Join(configDir(), "config.toml"))
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+	globalConfig = cfg
+	return nil
+}
+
+func openDatabase() error {
+	dir := filepath.Join(stateDir(), "db")
+	if err := os.MkdirAll(dir, permissions.DirMode); err != nil {
+		return fmt.Errorf("creating state dir: %w", err)
+	}
+	d, err := db.Open(filepath.Join(dir, "job.db"))
+	if err != nil {
+		return fmt.Errorf("opening db: %w", err)
+	}
+	globalDB = d
+	return nil
 }
 
 func Execute() {
