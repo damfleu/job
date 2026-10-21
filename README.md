@@ -129,33 +129,51 @@ When `job` detects Claude Code through `CLAUDECODE`, `CLAUDE_CODE`, or `CLAUDE_C
 
 ### Sequences
 
-Sequences capture one or more jobs and their combined upstream dependencies as a replayable workflow:
+Sequences are TOML files in `$XDG_CONFIG_HOME/job/sequences/` (normally
+`~/.config/job/sequences/`), or `$JOB_CONFIG_DIR/sequences/`. The filename
+without `.toml` is the sequence name.
+
+Capture jobs and their upstream dependencies, or write a file yourself:
 
 ```sh
-job run -- make build
-job run -A . -- make test
-job run -A . -- make deploy
-
-job sequence save deploy .
-
-job seq run deploy
-1776289652_45d54ee8_make              make build
-1776289652_3f2d7c52_make              make test
-1776289652_586ae893_make              make deploy
+job seq save .                      # print TOML; accepts multiple job keys
+job seq save . --output ~/.config/job/sequences/ci.toml
+job seq run ci
 ```
 
-Each replay spawns fresh jobs while preserving the original dependency structure.
+`save` preserves commands, directories, and dependencies. Use `--force` to
+replace an existing output file. Source jobs can be deleted afterward.
 
-Pass multiple keys to `save` to capture branches that share dependencies but have no common successor:
+```toml
+version = 1
+
+[[steps]]
+id = "build"
+command = ["make", "build"]
+
+[[steps]]
+id = "test"
+run = "make test > test-results.txt"
+after_success = ["build"]
+```
+
+Each step has a unique `id` and either `command` (literal arguments) or `run`
+(passed to `sh -c`). Dependencies reference step IDs: `after_success` requires
+success; `after` waits regardless of exit code. Each run creates fresh job keys.
+
+Set an absolute `cwd` at the sequence or step level; otherwise the invocation
+directory is used. `--cwd [dir]` overrides all steps. `automated` defaults to
+`true` and can also be set at either level.
 
 ```sh
-job sequence save ci keyB keyC
+job seq list
+job seq show ci --verbose           # include directories and automation settings
+job seq schema                     # JSON Schema with field descriptions
+job seq validate ./ci.toml          # validate a file, or omit to validate all
 ```
 
-Sequences snapshot each job's command, working directory, and dependency structure.
-Source jobs can be deleted without affecting the saved sequence.
-Context is resolved again when each step starts, using its effective working
-directory and the current resolver environment.
+`show` and `run` use installed names. Delete the file to remove a sequence.
+Existing database-backed sequences are not loaded or migrated.
 
 ### Notifications
 

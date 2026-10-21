@@ -36,11 +36,6 @@ CREATE INDEX IF NOT EXISTS idx_jobs_completed_stopped_jd
     ON jobs(status, julianday(stopped_at), key)
     WHERE status = 'completed';
 
-CREATE TABLE IF NOT EXISTS sequences (
-    name       TEXT PRIMARY KEY,
-    steps      TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
 `
 
 func migrate(db *sql.DB) error {

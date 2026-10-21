@@ -93,11 +93,7 @@ func (f *fakeStore) ListActive(filter, context string) ([]*model.Job, error) { r
 func (f *fakeStore) ListCompleted(limit int, filter, context string) ([]*model.Job, error) {
 	return nil, nil
 }
-func (f *fakeStore) ListDepFailed() ([]*model.Job, error)             { return nil, nil }
-func (f *fakeStore) SaveSequence(seq *model.Sequence) error           { return nil }
-func (f *fakeStore) GetSequence(name string) (*model.Sequence, error) { return nil, nil }
-func (f *fakeStore) ListSequences() ([]*model.Sequence, error)        { return nil, nil }
-func (f *fakeStore) DeleteSequence(name string) error                 { return nil }
+func (f *fakeStore) ListDepFailed() ([]*model.Job, error) { return nil, nil }
 
 func job(key, alias string, cmd []string, status model.Status) *model.Job {
 	return &model.Job{Key: key, Alias: alias, Command: cmd, Status: status}
