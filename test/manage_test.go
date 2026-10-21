@@ -263,7 +263,7 @@ func TestSequenceRunDoesNotUpdateDot(t *testing.T) {
 
 	// Create and run a sequence from a separate job.
 	seqKey := runFg(h, "echo", "seq step")
-	h.run("sequence", "save", "dot-seq", seqKey)
+	h.saveSequence("dot-seq", seqKey)
 	h.run("sequence", "run", "dot-seq")
 
 	// "." should still resolve to seqKey, not the automated sequence job.

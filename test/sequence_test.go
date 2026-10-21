@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"job/internal/model"
+	"job/internal/sequence"
 )
 
 // runFg runs a job and returns its key.
@@ -26,48 +27,45 @@ func TestSequenceSaveAndList(t *testing.T) {
 	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 
-	r := h.run("sequence", "save", "my-seq", keyB)
+	r := h.saveSequence("my-seq", keyB)
 	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stdout, "my-seq")
-	assert.Contains(t, r.stdout, "echo step-a")
-	assert.Contains(t, r.stdout, "echo step-b")
-	assert.NotContains(t, r.stdout, "cwd:")
+	assert.Empty(t, r.stdout)
+	assert.Contains(t, r.stderr, "my-seq.toml")
 
-	seq, err := h.db.GetSequence("my-seq")
+	seq, err := sequence.Load(filepath.Join(h.configDir, "sequences", "my-seq.toml"))
 	require.NoError(t, err)
 	require.Len(t, seq.Steps, 2)
-	assert.Equal(t, 1, seq.Steps[0].ID)
+	assert.Equal(t, "step-1", seq.Steps[0].ID)
 	assert.Equal(t, []string{"echo", "step-a"}, seq.Steps[0].Command)
-	assert.Equal(t, 2, seq.Steps[1].ID)
+	assert.Equal(t, "step-2", seq.Steps[1].ID)
 	assert.Equal(t, []string{"echo", "step-b"}, seq.Steps[1].Command)
-	require.Len(t, seq.Steps[1].Deps, 1)
-	assert.Equal(t, 1, seq.Steps[1].Deps[0].StepID)
+	require.Equal(t, []string{"step-1"}, seq.Steps[1].AfterSuccess)
 
 	r = h.run("sequence", "list")
 	assert.Equal(t, 0, r.exitCode)
 	assert.Contains(t, r.stdout, "my-seq")
-
-	r = h.run("sequence", "save", "--verbose", "verbose-seq", keyB)
-	assert.Equal(t, 0, r.exitCode)
-	assert.Equal(t, 1, strings.Count(r.stdout, "cwd:"))
+	assert.Contains(t, r.stdout, filepath.Join(h.configDir, "sequences", "my-seq.toml"))
+	assert.NotContains(t, r.stdout, "CREATED")
 }
 
-func TestSequenceSaveReplacesWithWarning(t *testing.T) {
+func TestSequenceSaveRequiresForceToReplace(t *testing.T) {
 	h := newHarness(t)
-
 	keyA := runFg(h, "echo", "step-a")
-	h.run("sequence", "save", "my-seq", keyA)
-
+	h.saveSequence("my-seq", keyA)
+	path := filepath.Join(h.configDir, "sequences", "my-seq.toml")
 	keyB := runFg(h, "echo", "step-b")
-	r := h.run("sequence", "save", "my-seq", keyB)
-	assert.Equal(t, 0, r.exitCode)
-	assert.Contains(t, r.stderr, "warning: replacing existing sequence")
-
-	seq, err := h.db.GetSequence("my-seq")
+	r := h.run("seq", "save", keyB, "--output", path)
+	require.NotZero(t, r.exitCode)
+	require.Contains(t, r.stderr, "--force")
+	original, err := sequence.Load(path)
 	require.NoError(t, err)
-	require.Len(t, seq.Steps, 1)
-	assert.Equal(t, 1, seq.Steps[0].ID)
-	assert.Equal(t, []string{"echo", "step-b"}, seq.Steps[0].Command)
+	require.Equal(t, []string{"echo", "step-a"}, original.Steps[0].Command)
+	r = h.run("seq", "save", keyB, "--output", path, "--force")
+	require.Equal(t, 0, r.exitCode, r.stderr)
+	require.Empty(t, r.stdout)
+	replaced, err := sequence.Load(path)
+	require.NoError(t, err)
+	require.Equal(t, []string{"echo", "step-b"}, replaced.Steps[0].Command)
 }
 
 func TestSequenceShow(t *testing.T) {
@@ -77,7 +75,7 @@ func TestSequenceShow(t *testing.T) {
 	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 
-	h.run("sequence", "save", "show-seq", keyB)
+	h.saveSequence("show-seq", keyB)
 
 	r := h.run("sequence", "show", "show-seq")
 	assert.Equal(t, 0, r.exitCode)
@@ -102,7 +100,7 @@ func TestSequenceShowVerboseDisplaysDifferentWorkDirsPerStep(t *testing.T) {
 	require.NoError(t, err)
 	h.runFrom(otherDir, "run", "-f", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
-	h.run("sequence", "save", "mixed-cwd-seq", keyB)
+	h.saveSequence("mixed-cwd-seq", keyB)
 
 	r := h.run("sequence", "show", "--verbose", "mixed-cwd-seq")
 	require.Equal(t, 0, r.exitCode, r.stderr)
@@ -117,7 +115,7 @@ func TestSequenceRun(t *testing.T) {
 	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
 
-	h.run("sequence", "save", "run-seq", keyB)
+	h.saveSequence("run-seq", keyB)
 
 	r := h.run("sequence", "run", "run-seq")
 	assert.Equal(t, 0, r.exitCode)
@@ -155,7 +153,7 @@ func TestSequenceRunResolvesContextAtExecutionTime(t *testing.T) {
 	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", originalResolver))
 
 	sourceKey := runFg(h, "echo", "step")
-	h.run("sequence", "save", "context-seq", sourceKey)
+	h.saveSequence("context-seq", sourceKey)
 
 	currentResolver := h.writeScript("echo current-context\n")
 	h.writeConfig(fmt.Sprintf("[context]\nresolvers = [%q]\n", currentResolver))
@@ -177,7 +175,7 @@ func TestSequenceRunAfterSuccessPropagatesFailure(t *testing.T) {
 	h.run("run", "-A", keyA, "echo", "should-not-run")
 	keyB := h.lastJob().Key
 
-	h.run("sequence", "save", "fail-seq", keyB)
+	h.saveSequence("fail-seq", keyB)
 
 	r := h.run("sequence", "run", "fail-seq")
 	assert.Equal(t, 0, r.exitCode)
@@ -207,7 +205,7 @@ func TestSequenceRmUnknown(t *testing.T) {
 
 func TestSequenceSaveRequiresKey(t *testing.T) {
 	h := newHarness(t)
-	r := h.run("sequence", "save", "no-keys")
+	r := h.run("sequence", "save")
 	assert.NotEqual(t, 0, r.exitCode)
 }
 
@@ -215,7 +213,7 @@ func TestRmAllowsJobInSequence(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "echo", "step-a")
-	h.run("sequence", "save", "rm-seq", keyA)
+	h.saveSequence("rm-seq", keyA)
 
 	h.waitFor(keyA, model.StatusCompleted)
 	r := h.run("remove", "--yes", keyA)
@@ -232,7 +230,7 @@ func TestSequenceRunsAfterSourceJobsAreDeleted(t *testing.T) {
 	keyA := runFg(h, "echo", "step-a")
 	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
-	h.run("sequence", "save", "durable-seq", keyB)
+	h.saveSequence("durable-seq", keyB)
 
 	h.waitFor(keyA, model.StatusCompleted)
 	h.waitFor(keyB, model.StatusCompleted)
@@ -268,7 +266,7 @@ func TestSequenceRunCwd(t *testing.T) {
 	keyA := runFg(h, "echo", "step-a")
 	h.runFrom(origDir, "run", "-f", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
-	h.run("sequence", "save", "cwd-seq", keyB)
+	h.saveSequence("cwd-seq", keyB)
 
 	cwdDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
@@ -294,7 +292,7 @@ func TestSequenceRunCwdExplicit(t *testing.T) {
 	keyA := runFg(h, "echo", "step-a")
 	h.runFrom(origDir, "run", "-f", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
-	h.run("sequence", "save", "cwd-explicit-seq", keyB)
+	h.saveSequence("cwd-explicit-seq", keyB)
 
 	explicitDir, err := filepath.EvalSymlinks(t.TempDir())
 	require.NoError(t, err)
@@ -325,10 +323,10 @@ func TestSequenceSaveMultipleRoots(t *testing.T) {
 	h.run("run", "-A", keyA, "echo", "c")
 	keyC := h.lastJob().Key
 
-	r := h.run("sequence", "save", "multi-root", keyB, keyC)
+	r := h.saveSequence("multi-root", keyB, keyC)
 	assert.Equal(t, 0, r.exitCode)
 
-	seq, err := h.db.GetSequence("multi-root")
+	seq, err := sequence.Load(filepath.Join(h.configDir, "sequences", "multi-root.toml"))
 	require.NoError(t, err)
 	require.Len(t, seq.Steps, 3)
 
@@ -365,7 +363,7 @@ func TestSequenceRunAfterSuccess(t *testing.T) {
 	keyA := runFg(h, "echo", "step-a")
 	h.run("run", "-A", keyA, "echo", "step-b")
 	keyB := h.lastJob().Key
-	h.run("sequence", "save", "after-seq", keyB)
+	h.saveSequence("after-seq", keyB)
 
 	// gate is the external job the sequence must wait for.
 	gate := runFg(h, "echo", "gate")
@@ -400,7 +398,7 @@ func TestSequenceRunAfter(t *testing.T) {
 	h := newHarness(t)
 
 	keyA := runFg(h, "echo", "step-a")
-	h.run("sequence", "save", "after-any-seq", keyA)
+	h.saveSequence("after-any-seq", keyA)
 
 	gate := runFg(h, "false") // exits non-zero
 	h.waitFor(gate, model.StatusCompleted)
@@ -429,7 +427,7 @@ func TestSequenceRunAfterSuccessMultipleRoots(t *testing.T) {
 	// Two independent root steps, both should be gated.
 	keyA := runFg(h, "echo", "a")
 	keyB := runFg(h, "echo", "b")
-	h.run("sequence", "save", "multi-after-seq", keyA, keyB)
+	h.saveSequence("multi-after-seq", keyA, keyB)
 
 	gate := runFg(h, "echo", "gate")
 	h.waitFor(gate, model.StatusCompleted)
@@ -471,9 +469,9 @@ func TestSequenceDiamondDependency(t *testing.T) {
 	h.run("run", "-A", keyB, "-A", keyC, "echo", "d")
 	keyD := h.lastJob().Key
 
-	h.run("sequence", "save", "diamond", keyD)
+	h.saveSequence("diamond", keyD)
 
-	seq, err := h.db.GetSequence("diamond")
+	seq, err := sequence.Load(filepath.Join(h.configDir, "sequences", "diamond.toml"))
 	require.NoError(t, err)
 	require.Len(t, seq.Steps, 4)
 

@@ -13,6 +13,14 @@ import (
 
 const validSequenceFile = "version = 1\n[[steps]]\nid = 'hello'\ncommand = ['echo', 'hello']\n"
 
+func (h *harness) saveSequence(name string, keys ...string) result {
+	h.t.Helper()
+	args := []string{"seq", "save", "--output", filepath.Join(h.configDir, "sequences", name+".toml")}
+	r := h.run(append(args, keys...)...)
+	require.Equal(h.t, 0, r.exitCode, r.stderr)
+	return r
+}
+
 func (h *harness) writeSequenceFile(name, content string) string {
 	h.t.Helper()
 	dir := filepath.Join(h.configDir, "sequences")

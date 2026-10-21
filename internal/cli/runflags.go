@@ -128,23 +128,52 @@ func launchJob(command []string, workDir string, f RunFlags) error {
 func runSteps(steps []core.RunStep, extraDeps []model.Dep, notify bool) ([]string, error) {
 	newKeys := make([]string, len(steps))
 	origToNew := make(map[string]string, len(steps))
-
+	localIDs := make(map[string]bool, len(steps))
+	for _, step := range steps {
+		localIDs[step.ID] = true
+	}
+	// Resolve external references before creating jobs. In particular, a root
+	// with automated=false must not change what '.' means for a later root.
+	options := make([]core.RunOptions, len(steps))
 	for i, step := range steps {
-		deps := remapDeps(step.Deps, origToNew)
-		if len(deps) == 0 {
-			deps = append(extraDeps[:len(extraDeps):len(extraDeps)], deps...)
+		var external []model.Dep
+		if len(step.Deps) == 0 {
+			external = extraDeps
+		} else {
+			for _, dep := range step.Deps {
+				if !localIDs[dep.Key] {
+					external = append(external, dep)
+				}
+			}
 		}
 		opts, err := buildRunOptions(step.Command, step.WorkDir, RunFlags{
-			Notify:    notify,
-			Deps:      deps,
-			Automated: step.Automated,
+			Notify: notify, Deps: external, Automated: step.Automated,
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("step %q: %w", step.ID, err)
+		}
+		options[i] = opts
+	}
+
+	for i, step := range steps {
+		opts := options[i]
+		if len(step.Deps) > 0 {
+			external := opts.Deps
+			opts.Deps = make([]model.Dep, len(step.Deps))
+			externalIndex := 0
+			for j, dep := range step.Deps {
+				if localIDs[dep.Key] {
+					dep.Key = origToNew[dep.Key]
+				} else {
+					dep = external[externalIndex]
+					externalIndex++
+				}
+				opts.Deps[j] = dep
+			}
 		}
 		key, err := core.CreateAndSpawn(globalDB, stateDir(), step.Command, opts)
 		if err != nil {
-			return nil, fmt.Errorf("spawning step %d: %w", i, err)
+			return nil, fmt.Errorf("spawning step %q: %w", step.ID, err)
 		}
 		origToNew[step.ID] = key
 		newKeys[i] = key
@@ -163,23 +192,6 @@ func printStepKeys(w io.Writer, keys []string) {
 		}
 		fmt.Fprintf(w, "%-36s  %s\n", key, displayCmd(j.Command))
 	}
-}
-
-// remapDeps returns a copy of deps with each key substituted using origToNew where present.
-// Keys with no entry in origToNew (e.g. a dep outside the step set) are left unchanged.
-func remapDeps(deps []model.Dep, origToNew map[string]string) []model.Dep {
-	if len(deps) == 0 {
-		return deps
-	}
-	out := make([]model.Dep, len(deps))
-	for i, dep := range deps {
-		key := dep.Key
-		if newKey, ok := origToNew[dep.Key]; ok {
-			key = newKey
-		}
-		out[i] = model.Dep{Key: key, Kind: dep.Kind}
-	}
-	return out
 }
 
 // addCwdFlag registers --cwd onto cmd, writing into v.

@@ -1,9 +1,10 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -13,153 +14,153 @@ import (
 	"github.com/spf13/cobra"
 
 	"job/internal/core"
-	"job/internal/db"
 	"job/internal/model"
+	"job/internal/sequence"
 )
 
 var seqCmd = &cobra.Command{
 	Use:     "sequence",
 	Aliases: []string{"seq"},
 	Short:   "Manage sequences",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return cmd.Help()
-	},
+	Args:    cobra.NoArgs,
+	RunE:    func(cmd *cobra.Command, args []string) error { return cmd.Help() },
 }
 
+var seqSaveOutput string
+var seqSaveForce bool
 var seqSaveCmd = &cobra.Command{
-	Use:   "save <name> <key> [key...]",
-	Short: "Save jobs and their deps as a named sequence",
-	Args:  cobra.MinimumNArgs(2),
+	Use:   "save <key> [key...]",
+	Short: "Export jobs and their dependencies as a TOML sequence",
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Flags().Changed("output") && seqSaveOutput == "" {
+			return fmt.Errorf("--output requires a non-empty file path")
+		}
+		if seqSaveForce && seqSaveOutput == "" {
+			return fmt.Errorf("--force requires --output")
+		}
 		resolveCtx()
-		name := args[0]
-		keys := args[1:]
-		existing, err := globalDB.GetSequence(name)
-		if err != nil && !errors.Is(err, db.ErrSequenceNotFound) {
-			return err
-		}
-		if existing != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "warning: replacing existing sequence %q\n", name)
-		}
-		jobs := make([]*model.Job, len(keys))
-		for i, key := range keys {
-			j, err := core.ResolveKey(globalDB, key, hereCtx)
+		jobs := make([]*model.Job, len(args))
+		for i, key := range args {
+			job, err := core.ResolveKey(globalDB, key, hereCtx)
 			if err != nil {
 				return err
 			}
-			jobs[i] = j
+			jobs[i] = job
 		}
-		if err := core.SaveSequence(globalDB, name, jobs); err != nil {
-			return err
-		}
-		seq, err := globalDB.GetSequence(name)
+		d, err := core.CaptureSequence(globalDB, jobs)
 		if err != nil {
 			return err
 		}
-		printSeqSteps(seq, seqSaveVerbose)
+		if seqSaveOutput == "" {
+			return sequence.Encode(cmd.OutOrStdout(), d)
+		}
+		if err := sequence.WriteFile(seqSaveOutput, d, seqSaveForce); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.ErrOrStderr(), "saved %s\n", seqSaveOutput)
 		return nil
 	},
 }
 
-var seqSaveVerbose bool
 var seqRunCwd string
 var seqRunNotify bool
 var seqRunDeps []model.Dep
-
 var seqRunCmd = &cobra.Command{
 	Use:   "run <name>",
-	Short: "Replay a sequence",
+	Short: "Run an installed sequence",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var workDirOverride string
-		if seqRunCwd != "" {
-			var err error
-			workDirOverride, err = resolveCwdFlag(seqRunCwd)
-			if err != nil {
-				return fmt.Errorf("resolving --cwd: %w", err)
-			}
-		}
-		steps, err := core.ExpandSequence(globalDB, args[0], workDirOverride)
+		entry, err := sequence.LoadNamed(sequenceDir(), args[0])
 		if err != nil {
 			return err
 		}
-
-		newKeys, err := runSteps(steps, seqRunDeps, seqRunNotify)
+		override, err := resolveCwdFlag(seqRunCwd)
+		if err != nil {
+			return fmt.Errorf("resolving --cwd: %w", err)
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		steps, err := core.PlanSequence(entry.Definition, cwd, override)
+		if err != nil {
+			return err
+		}
+		// Check all effective directories after overrides and before launching
+		// any step. Schema/file validation intentionally does not access them.
+		for _, step := range steps {
+			info, err := os.Stat(step.WorkDir)
+			if err != nil {
+				return fmt.Errorf("step %q: cwd: %w", step.ID, err)
+			}
+			if !info.IsDir() {
+				return fmt.Errorf("step %q: cwd %q is not a directory", step.ID, step.WorkDir)
+			}
+		}
+		keys, err := runSteps(steps, seqRunDeps, seqRunNotify)
 		if err != nil {
 			return fmt.Errorf("sequence: %w", err)
 		}
-
-		printStepKeys(cmd.OutOrStdout(), newKeys)
+		printStepKeys(cmd.OutOrStdout(), keys)
 		return nil
 	},
 }
 
 var seqListCmd = &cobra.Command{
-	Use:     "list",
-	Aliases: []string{"ls"},
-	Short:   "List all sequences",
+	Use:               "list",
+	Aliases:           []string{"ls"},
+	Short:             "List installed sequences",
+	Args:              cobra.NoArgs,
+	PersistentPreRunE: loadConfig,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		seqs, err := globalDB.ListSequences()
-		if err != nil {
-			return err
+		entries, err := sequence.List(sequenceDir())
+		if len(entries) > 0 {
+			printSeqTable(cmd.OutOrStdout(), entries)
+		} else if err == nil {
+			fmt.Fprintln(cmd.ErrOrStderr(), "no sequences")
 		}
-		if len(seqs) == 0 {
-			fmt.Fprintln(os.Stderr, "no sequences")
-			return nil
-		}
-		printSeqTable(seqs)
-		return nil
-	},
-}
-
-var seqShowCmd = &cobra.Command{
-	Use:   "show <name>",
-	Short: "Show the steps of a sequence",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		seq, err := globalDB.GetSequence(args[0])
-		if err != nil {
-			return err
-		}
-		printSeqSteps(seq, seqShowVerbose)
-		return nil
+		return err
 	},
 }
 
 var seqShowVerbose bool
-
-var seqRmCmd = &cobra.Command{
-	Use:     "remove <name>",
-	Aliases: []string{"rm"},
-	Short:   "Delete a sequence",
-	Args:    cobra.ExactArgs(1),
+var seqShowCmd = &cobra.Command{
+	Use:               "show <name>",
+	Short:             "Show the steps of an installed sequence",
+	Args:              cobra.ExactArgs(1),
+	PersistentPreRunE: loadConfig,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := globalDB.DeleteSequence(args[0]); err != nil {
+		entry, err := sequence.LoadNamed(sequenceDir(), args[0])
+		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "removed sequence %q\n", args[0])
+		printSeqSteps(cmd.OutOrStdout(), entry, seqShowVerbose)
 		return nil
 	},
 }
 
+func sequenceDir() string { return filepath.Join(configDir(), "sequences") }
+
 func init() {
 	addAnyFlag(seqSaveCmd)
-	seqSaveCmd.Flags().BoolVarP(&seqSaveVerbose, "verbose", "v", false, "show step working directories")
-	addCwdFlag(seqRunCmd, &seqRunCwd, "run steps in a directory instead of their original directories")
+	seqSaveCmd.Flags().StringVarP(&seqSaveOutput, "output", "o", "", "write TOML to a file instead of stdout")
+	seqSaveCmd.Flags().BoolVar(&seqSaveForce, "force", false, "replace an existing output file")
+	addCwdFlag(seqRunCmd, &seqRunCwd, "override every step's working directory")
 	seqRunCmd.Flags().BoolVarP(&seqRunNotify, "notify", "n", false, "notify on completion of each step")
 	seqRunCmd.Flags().VarP(depFlag{model.DepAfter, &seqRunDeps}, "after", "a", "run sequence after job completes (any exit code)")
 	seqRunCmd.Flags().VarP(depFlag{model.DepAfterSuccess, &seqRunDeps}, "after-success", "A", "run sequence only if job succeeds (exit 0)")
-	seqShowCmd.Flags().BoolVarP(&seqShowVerbose, "verbose", "v", false, "show step working directories")
-	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd, seqRmCmd)
+	seqShowCmd.Flags().BoolVarP(&seqShowVerbose, "verbose", "v", false, "show working directories and automation settings")
+	seqCmd.AddCommand(seqSaveCmd, seqRunCmd, seqListCmd, seqShowCmd)
 	rootCmd.AddCommand(seqCmd)
 }
 
-func printSeqTable(seqs []*model.Sequence) {
+func printSeqTable(w io.Writer, entries []sequence.Entry) {
 	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-	t.AppendHeader(table.Row{"NAME", "STEPS", "CREATED"})
-	for _, seq := range seqs {
-		t.AppendRow(table.Row{seq.Name, fmt.Sprintf("%d", len(seq.Steps)), formatTime(seq.CreatedAt)})
+	t.SetOutputMirror(w)
+	t.AppendHeader(table.Row{"NAME", "STEPS", "PATH"})
+	for _, entry := range entries {
+		t.AppendRow(table.Row{entry.Name, fmt.Sprintf("%d", len(entry.Definition.Steps)), entry.Path})
 	}
 	if !term.IsTerminal(os.Stdout.Fd()) {
 		t.RenderTSV()
@@ -169,122 +170,104 @@ func printSeqTable(seqs []*model.Sequence) {
 	t.Render()
 }
 
-func printSeqSteps(seq *model.Sequence, verbose bool) {
-	fmt.Fprintln(os.Stdout, seq.Name)
-
+func printSeqSteps(w io.Writer, entry *sequence.Entry, verbose bool) {
+	d := entry.Definition
+	fmt.Fprintln(w, entry.Name)
+	if d.Description != "" {
+		fmt.Fprintln(w, d.Description)
+	}
 	showWorkDir := false
 	if verbose {
-		workDir, commonWorkDir := commonStepValue(seq.Steps, func(step model.SequenceStep) string {
-			return displayStepWorkDir(step.WorkDir)
-		})
-
-		if commonWorkDir {
-			fmt.Fprintf(os.Stdout, "cwd: %s\n", workDir)
-		} else {
-			showWorkDir = true
+		fmt.Fprintf(w, "file: %s\n", entry.Path)
+		cwd := stepWorkDir(d, &d.Steps[0])
+		for i := range d.Steps[1:] {
+			if stepWorkDir(d, &d.Steps[i+1]) != cwd {
+				showWorkDir = true
+				break
+			}
+		}
+		if !showWorkDir {
+			fmt.Fprintf(w, "cwd: %s\n", displayStepWorkDir(cwd))
 		}
 	}
-
-	fmt.Fprintln(os.Stdout)
-	fmt.Print(renderSeqTree(seq.Steps, showWorkDir))
+	fmt.Fprintln(w)
+	fmt.Fprint(w, renderSeqTree(d, showWorkDir, verbose))
 }
 
-func commonStepValue(
-	steps []model.SequenceStep,
-	value func(model.SequenceStep) string,
-) (string, bool) {
-	if len(steps) == 0 {
-		return "", false
+func stepWorkDir(d *sequence.Definition, step *sequence.Step) string {
+	if step.CWD != nil {
+		return *step.CWD
 	}
-	first := value(steps[0])
-	for _, step := range steps[1:] {
-		if value(step) != first {
-			return "", false
-		}
+	if d.CWD != nil {
+		return *d.CWD
 	}
-	return first, true
+	return ""
 }
 
-// seqEdge pairs a child step with the dep kind linking it to its parent.
 type seqEdge struct {
-	step *model.SequenceStep
+	step *sequence.Step
 	kind model.DepKind
 }
 
-// renderSeqTree renders the sequence steps as a dependency tree, with ✓/~ prefixes
-// indicating after-success / after dep kinds on each child node.
-func renderSeqTree(steps []model.SequenceStep, showWorkDir bool) string {
-	byID := make(map[int]*model.SequenceStep, len(steps))
-	for i := range steps {
-		byID[steps[i].ID] = &steps[i]
-	}
-
-	children := make(map[int][]seqEdge)
-	isChild := make(map[int]bool)
-	for i := range steps {
-		step := &steps[i]
-		for _, dep := range step.Deps {
-			if _, inSeq := byID[dep.StepID]; inSeq {
-				children[dep.StepID] = append(
-					children[dep.StepID],
-					seqEdge{step: step, kind: dep.Kind},
-				)
-				isChild[step.ID] = true
-			}
+func renderSeqTree(d *sequence.Definition, showWorkDir, verbose bool) string {
+	children := make(map[string][]seqEdge)
+	isChild := make(map[string]bool)
+	for i := range d.Steps {
+		step := &d.Steps[i]
+		for _, id := range step.After {
+			children[id] = append(children[id], seqEdge{step: step, kind: model.DepAfter})
+			isChild[step.ID] = true
+		}
+		for _, id := range step.AfterSuccess {
+			children[id] = append(children[id], seqEdge{step: step, kind: model.DepAfterSuccess})
+			isChild[step.ID] = true
 		}
 	}
-
-	var roots []*model.SequenceStep
-	for i := range steps {
-		if !isChild[steps[i].ID] {
-			roots = append(roots, &steps[i])
-		}
-	}
-
-	var buildNode func(step *model.SequenceStep, kind model.DepKind, isRoot bool) *tree.Tree
-	buildNode = func(step *model.SequenceStep, kind model.DepKind, isRoot bool) *tree.Tree {
-		label := seqNodeLabel(step, kind, isRoot, showWorkDir)
-		t := tree.Root(label)
+	var buildNode func(*sequence.Step, model.DepKind) *tree.Tree
+	buildNode = func(step *sequence.Step, kind model.DepKind) *tree.Tree {
+		t := tree.Root(seqNodeLabel(d, step, kind, showWorkDir, verbose))
 		for _, edge := range children[step.ID] {
-			t.Child(buildNode(edge.step, edge.kind, false))
+			t.Child(buildNode(edge.step, edge.kind))
 		}
 		return t
 	}
-
 	var parts []string
-	for _, root := range roots {
-		parts = append(parts, buildNode(root, "", true).String())
+	for i := range d.Steps {
+		step := &d.Steps[i]
+		if !isChild[step.ID] {
+			parts = append(parts, buildNode(step, "").String())
+		}
 	}
 	return strings.Join(parts, "\n") + "\n"
 }
 
-func seqNodeLabel(
-	step *model.SequenceStep,
-	kind model.DepKind,
-	isRoot bool,
-	showWorkDir bool,
-) string {
+func seqNodeLabel(d *sequence.Definition, step *sequence.Step, kind model.DepKind, showWorkDir, verbose bool) string {
 	prefix := ""
-	if !isRoot {
-		switch kind {
-		case model.DepAfterSuccess:
-			prefix = "✓ "
-		case model.DepAfter:
-			prefix = "→ "
+	switch kind {
+	case model.DepAfterSuccess:
+		prefix = "✓ "
+	case model.DepAfter:
+		prefix = "→ "
+	}
+	command := displayCmd(step.Command)
+	if step.Run != nil {
+		command = *step.Run
+	}
+	command = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(command)
+	lines := []string{prefix + step.ID + ": " + command}
+	if showWorkDir {
+		lines = append(lines, fmt.Sprintf("  cwd: %s", displayStepWorkDir(stepWorkDir(d, step))))
+	}
+	if verbose {
+		automated := true
+		if d.Automated != nil {
+			automated = *d.Automated
 		}
+		if step.Automated != nil {
+			automated = *step.Automated
+		}
+		lines = append(lines, fmt.Sprintf("  automated: %t", automated))
 	}
-	command := lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(displayCmd(step.Command))
-	if !showWorkDir {
-		return prefix + command
-	}
-
-	detailIndent := "  "
-	if prefix != "" {
-		detailIndent = strings.Repeat(" ", lipgloss.Width(prefix))
-	}
-
-	lines := []string{prefix + command}
-	lines = append(lines, fmt.Sprintf("%scwd: %s", detailIndent, displayStepWorkDir(step.WorkDir)))
 	return strings.Join(lines, "\n")
 }
 

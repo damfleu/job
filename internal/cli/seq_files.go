@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -35,7 +34,7 @@ var seqValidateCmd = &cobra.Command{
 		paths := args
 		if len(paths) == 0 {
 			var err error
-			paths, err = sequence.Files(filepath.Join(configDir(), "sequences"))
+			paths, err = sequence.Files(sequenceDir())
 			if err != nil {
 				return err
 			}
