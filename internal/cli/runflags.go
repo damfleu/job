@@ -137,7 +137,7 @@ func runSteps(steps []core.RunStep, extraDeps []model.Dep, notify bool) ([]strin
 		opts, err := buildRunOptions(step.Command, step.WorkDir, RunFlags{
 			Notify:    notify,
 			Deps:      deps,
-			Automated: true,
+			Automated: step.Automated,
 		})
 		if err != nil {
 			return nil, err

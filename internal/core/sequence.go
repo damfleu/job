@@ -13,26 +13,9 @@ import (
 // SaveSequence walks the transitive dependency graph of all provided jobs, topologically sorts the
 // result (deps before dependents), and stores it as a named sequence.
 func SaveSequence(store db.JobStore, name string, jobs []*model.Job) error {
-	visited := map[string]*model.Job{}
-	queue := make([]*model.Job, len(jobs))
-	copy(queue, jobs)
-
-	for len(queue) > 0 {
-		curr := queue[0]
-		queue = queue[1:]
-		if _, seen := visited[curr.Key]; seen {
-			continue
-		}
-		visited[curr.Key] = curr
-		for _, dep := range curr.Deps {
-			if _, seen := visited[dep.Key]; !seen {
-				depJob, err := store.Get(dep.Key)
-				if err != nil {
-					return fmt.Errorf("sequence: fetching dep %s: %w", dep.Key, err)
-				}
-				queue = append(queue, depJob)
-			}
-		}
+	visited, err := captureJobs(store, jobs)
+	if err != nil {
+		return err
 	}
 
 	order, err := topoSort(visited)
@@ -78,10 +61,11 @@ func SaveSequence(store db.JobStore, name string, jobs []*model.Job) error {
 // refer to other RunStep IDs and are remapped to new job keys by the caller.
 // Retry cascades may additionally retain dependencies on jobs outside the set.
 type RunStep struct {
-	ID      string
-	Command []string
-	WorkDir string
-	Deps    []model.Dep
+	ID        string
+	Command   []string
+	WorkDir   string
+	Deps      []model.Dep
+	Automated bool
 }
 
 // ExpandSequence loads a named sequence and returns its steps in topological order as plain
@@ -104,10 +88,11 @@ func ExpandSequence(store db.JobStore, name, workDirOverride string) ([]RunStep,
 			deps[j] = model.Dep{Key: strconv.Itoa(dep.StepID), Kind: dep.Kind}
 		}
 		steps[i] = RunStep{
-			ID:      strconv.Itoa(step.ID),
-			Command: append([]string(nil), step.Command...),
-			WorkDir: workDir,
-			Deps:    deps,
+			ID:        strconv.Itoa(step.ID),
+			Automated: true,
+			Command:   append([]string(nil), step.Command...),
+			WorkDir:   workDir,
+			Deps:      deps,
 		}
 	}
 	return steps, nil

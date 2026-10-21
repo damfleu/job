@@ -45,6 +45,9 @@ func TestExpandDependentCascadeChain(t *testing.T) {
 	assert.Equal(t, "root", steps[0].ID)
 	assert.Equal(t, "child", steps[1].ID)
 	assert.Equal(t, "grandchild", steps[2].ID)
+	for _, step := range steps {
+		assert.True(t, step.Automated, "retry cascades keep automated execution")
+	}
 
 	// root doesn't carry over its own (external) deps
 	assert.Empty(t, steps[0].Deps)

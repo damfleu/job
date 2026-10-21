@@ -56,10 +56,11 @@ func ExpandDependentCascade(store db.JobStore, rootKey string) ([]RunStep, error
 			deps = nil
 		}
 		steps[i] = RunStep{
-			ID:      key,
-			Command: j.Command,
-			WorkDir: j.WorkDir,
-			Deps:    deps,
+			ID:        key,
+			Automated: true,
+			Command:   j.Command,
+			WorkDir:   j.WorkDir,
+			Deps:      deps,
 		}
 	}
 	return steps, nil
