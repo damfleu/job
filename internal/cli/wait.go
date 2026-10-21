@@ -25,8 +25,7 @@ var waitCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		resolveCtx()
-		keys, err := resolveWaitKeys(args)
+		keys, err := resolveWaitKeys(cmd, args)
 		if err != nil {
 			return err
 		}
@@ -59,15 +58,16 @@ var waitCmd = &cobra.Command{
 func init() {
 	waitCmd.Flags().BoolVarP(&waitWatch, "watch", "w", false, "print and follow a single job's log until completion (summary on stderr)")
 	addAnyFlag(waitCmd)
+	addSelectFlag(waitCmd)
 	rootCmd.AddCommand(waitCmd)
 }
 
 // resolveWaitKeys resolves args to job keys, scoped to the current context
-// unless --any was passed. With no args it falls back to the last running
-// job, same default as log/show/stop.
-func resolveWaitKeys(args []string) ([]string, error) {
+// unless --any was passed. With no args it uses the same default or
+// interactive selection as log/show/stop.
+func resolveWaitKeys(cmd *cobra.Command, args []string) ([]string, error) {
 	if len(args) == 0 {
-		j, err := core.ResolveDefault(globalDB, hereCtx, model.StatusRunning)
+		j, err := resolveJobArg(cmd, nil, model.StatusRunning)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func resolveWaitKeys(args []string) ([]string, error) {
 
 	keys := make([]string, len(args))
 	for i, arg := range args {
-		j, err := core.ResolveKey(globalDB, arg, hereCtx)
+		j, err := resolveJobArg(cmd, []string{arg}, model.StatusRunning)
 		if err != nil {
 			return nil, err
 		}

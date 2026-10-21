@@ -58,6 +58,35 @@ func TestWaitDefaultsToLastRunning(t *testing.T) {
 	assert.Equal(t, 0, r.exitCode)
 }
 
+func TestWaitSelectExactKeys(t *testing.T) {
+	h := newHarness(t)
+	require.Equal(t, 0, h.run("run", "-k", "a", "--", "true").exitCode)
+	require.Equal(t, 0, h.run("run", "-k", "b", "--", "true").exitCode)
+
+	for _, flag := range []string{"-i", "--select"} {
+		r := h.run("wait", flag, "a", "b")
+		assert.Equal(t, 0, r.exitCode, r.stderr)
+		assert.Len(t, strings.Split(strings.TrimSpace(r.stdout), "\n"), 2)
+	}
+}
+
+func TestWaitSelectRequiresTerminalForPicker(t *testing.T) {
+	h := newHarness(t)
+	require.Equal(t, 0, h.run("run", "-k", "a", "--", "echo", "shared-query").exitCode)
+	require.Equal(t, 0, h.run("run", "-k", "b", "--", "echo", "shared-query").exitCode)
+
+	for _, args := range [][]string{
+		{"wait", "-i"},
+		{"wait", "-i", "shared-query"},
+		{"wait", "-i", "a", "shared-query"},
+		{"wait", "-wi"},
+	} {
+		r := h.run(args...)
+		assert.Equal(t, 1, r.exitCode)
+		assert.Contains(t, r.stderr, "interactive selection requires a terminal")
+	}
+}
+
 func TestWaitWatchCompletedJob(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -72,7 +101,7 @@ func TestWaitWatchCompletedJob(t *testing.T) {
 			require.Equal(t, 0, h.run("run", "-k", "logged", "--", "sh", "-c", tc.cmd).exitCode)
 			require.Equal(t, tc.code, h.run("wait", "logged").exitCode)
 
-			r := h.run("wait", "--watch", "logged")
+			r := h.run("wait", "--watch", "-i", "logged")
 			assert.Equal(t, tc.code, r.exitCode)
 			assert.Equal(t, "stdout\nstderr\n", r.stdout)
 			assert.Contains(t, r.stderr, tc.name)
