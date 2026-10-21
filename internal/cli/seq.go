@@ -176,7 +176,7 @@ func printSeqSteps(w io.Writer, entry *sequence.Entry, verbose bool) {
 	if d.Description != "" {
 		fmt.Fprintln(w, d.Description)
 	}
-	showWorkDir := false
+	showWorkDir, showAutomated := false, false
 	if verbose {
 		fmt.Fprintf(w, "file: %s\n", entry.Path)
 		cwd := stepWorkDir(d, &d.Steps[0])
@@ -189,9 +189,19 @@ func printSeqSteps(w io.Writer, entry *sequence.Entry, verbose bool) {
 		if !showWorkDir {
 			fmt.Fprintf(w, "cwd: %s\n", displayStepWorkDir(cwd))
 		}
+		automated := stepAutomated(d, &d.Steps[0])
+		for i := range d.Steps[1:] {
+			if stepAutomated(d, &d.Steps[i+1]) != automated {
+				showAutomated = true
+				break
+			}
+		}
+		if !showAutomated {
+			fmt.Fprintf(w, "automated: %t\n", automated)
+		}
 	}
 	fmt.Fprintln(w)
-	fmt.Fprint(w, renderSeqTree(d, showWorkDir, verbose))
+	fmt.Fprint(w, renderSeqTree(d, showWorkDir, showAutomated))
 }
 
 func stepWorkDir(d *sequence.Definition, step *sequence.Step) string {
@@ -204,12 +214,22 @@ func stepWorkDir(d *sequence.Definition, step *sequence.Step) string {
 	return ""
 }
 
+func stepAutomated(d *sequence.Definition, step *sequence.Step) bool {
+	if step.Automated != nil {
+		return *step.Automated
+	}
+	if d.Automated != nil {
+		return *d.Automated
+	}
+	return true
+}
+
 type seqEdge struct {
 	step *sequence.Step
 	kind model.DepKind
 }
 
-func renderSeqTree(d *sequence.Definition, showWorkDir, verbose bool) string {
+func renderSeqTree(d *sequence.Definition, showWorkDir, showAutomated bool) string {
 	children := make(map[string][]seqEdge)
 	isChild := make(map[string]bool)
 	for i := range d.Steps {
@@ -225,7 +245,7 @@ func renderSeqTree(d *sequence.Definition, showWorkDir, verbose bool) string {
 	}
 	var buildNode func(*sequence.Step, model.DepKind) *tree.Tree
 	buildNode = func(step *sequence.Step, kind model.DepKind) *tree.Tree {
-		t := tree.Root(seqNodeLabel(d, step, kind, showWorkDir, verbose))
+		t := tree.Root(seqNodeLabel(d, step, kind, showWorkDir, showAutomated))
 		for _, edge := range children[step.ID] {
 			t.Child(buildNode(edge.step, edge.kind))
 		}
@@ -241,7 +261,7 @@ func renderSeqTree(d *sequence.Definition, showWorkDir, verbose bool) string {
 	return strings.Join(parts, "\n") + "\n"
 }
 
-func seqNodeLabel(d *sequence.Definition, step *sequence.Step, kind model.DepKind, showWorkDir, verbose bool) string {
+func seqNodeLabel(d *sequence.Definition, step *sequence.Step, kind model.DepKind, showWorkDir, showAutomated bool) string {
 	prefix := ""
 	switch kind {
 	case model.DepAfterSuccess:
@@ -258,15 +278,8 @@ func seqNodeLabel(d *sequence.Definition, step *sequence.Step, kind model.DepKin
 	if showWorkDir {
 		lines = append(lines, fmt.Sprintf("  cwd: %s", displayStepWorkDir(stepWorkDir(d, step))))
 	}
-	if verbose {
-		automated := true
-		if d.Automated != nil {
-			automated = *d.Automated
-		}
-		if step.Automated != nil {
-			automated = *step.Automated
-		}
-		lines = append(lines, fmt.Sprintf("  automated: %t", automated))
+	if showAutomated {
+		lines = append(lines, fmt.Sprintf("  automated: %t", stepAutomated(d, step)))
 	}
 	return strings.Join(lines, "\n")
 }
