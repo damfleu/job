@@ -1,0 +1,26 @@
+version = 1
+description = "Build, test in parallel, and report even after failure"
+cwd = "/workspace/project"
+automated = true
+
+# Forward references are valid; file order is for presentation.
+[[steps]]
+id = "report"
+run = "./scripts/report.sh > report.txt"
+after = ["unit", "integration"]
+automated = false
+
+[[steps]]
+id = "build"
+command = ["make", "build"]
+
+[[steps]]
+id = "unit"
+command = ["make", "test-unit"]
+after_success = ["build"]
+
+[[steps]]
+id = "integration"
+command = ["make", "test-integration"]
+cwd = "/workspace/integration"
+after_success = ["build"]
