@@ -83,11 +83,12 @@ func TestSequenceShow(t *testing.T) {
 	assert.Contains(t, r.stdout, "echo step-a")
 	assert.Contains(t, r.stdout, "echo step-b")
 	assert.NotContains(t, r.stdout, "cwd:")
+	assert.NotContains(t, r.stdout, "Directory")
 	assert.Contains(t, r.stdout, "✓")
 
 	r = h.run("sequence", "show", "--verbose", "show-seq")
 	assert.Equal(t, 0, r.exitCode)
-	assert.Equal(t, 1, strings.Count(r.stdout, "cwd:"))
+	assert.Equal(t, 1, strings.Count(r.stdout, "Directory"))
 	assert.Contains(t, r.stdout, "echo step-a")
 	assert.Contains(t, r.stdout, "echo step-b")
 }

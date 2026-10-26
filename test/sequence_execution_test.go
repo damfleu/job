@@ -218,7 +218,7 @@ func TestSequenceShowAndListReadFilesWithoutDatabase(t *testing.T) {
 	require.Equal(t, 0, r.exitCode, r.stderr)
 	require.Contains(t, r.stdout, "hello:")
 	require.Contains(t, r.stdout, "echo hello")
-	require.Contains(t, r.stdout, "automated: true")
+	require.Regexp(t, "Automated[^\n]*  true\n", r.stdout)
 	require.Contains(t, r.stdout, path)
 	r = h.runWithEnv(env, "seq", "list")
 	require.Equal(t, 0, r.exitCode, r.stderr)

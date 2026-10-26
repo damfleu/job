@@ -172,13 +172,20 @@ func printSeqTable(w io.Writer, entries []sequence.Entry) {
 
 func printSeqSteps(w io.Writer, entry *sequence.Entry, verbose bool) {
 	d := entry.Definition
-	fmt.Fprintln(w, entry.Name)
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	printAttribute := func(label, value string) {
+		fmt.Fprintf(w, "%s  %s\n", labelStyle.Render(fmt.Sprintf("%-9s", label)), value)
+	}
+	fmt.Fprintln(w, titleStyle.Render(entry.Name))
 	if d.Description != "" {
+		fmt.Fprintln(w)
 		fmt.Fprintln(w, d.Description)
 	}
 	showWorkDir, showAutomated := false, false
 	if verbose {
-		fmt.Fprintf(w, "file: %s\n", entry.Path)
+		fmt.Fprintln(w)
+		printAttribute("File", entry.Path)
 		cwd := stepWorkDir(d, &d.Steps[0])
 		for i := range d.Steps[1:] {
 			if stepWorkDir(d, &d.Steps[i+1]) != cwd {
@@ -187,7 +194,7 @@ func printSeqSteps(w io.Writer, entry *sequence.Entry, verbose bool) {
 			}
 		}
 		if !showWorkDir {
-			fmt.Fprintf(w, "cwd: %s\n", displayStepWorkDir(cwd))
+			printAttribute("Directory", displayStepWorkDir(cwd))
 		}
 		automated := stepAutomated(d, &d.Steps[0])
 		for i := range d.Steps[1:] {
@@ -197,7 +204,7 @@ func printSeqSteps(w io.Writer, entry *sequence.Entry, verbose bool) {
 			}
 		}
 		if !showAutomated {
-			fmt.Fprintf(w, "automated: %t\n", automated)
+			printAttribute("Automated", fmt.Sprintf("%t", automated))
 		}
 	}
 	fmt.Fprintln(w)
@@ -273,8 +280,8 @@ func seqNodeLabel(d *sequence.Definition, step *sequence.Step, kind model.DepKin
 	if step.Run != nil {
 		command = *step.Run
 	}
-	command = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(command)
-	lines := []string{prefix + step.ID + ": " + command}
+	label := lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Render(step.ID + ":")
+	lines := []string{prefix + label + " " + command}
 	if showWorkDir {
 		lines = append(lines, fmt.Sprintf("  cwd: %s", displayStepWorkDir(stepWorkDir(d, step))))
 	}
